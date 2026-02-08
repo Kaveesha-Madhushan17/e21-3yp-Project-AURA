@@ -11,7 +11,7 @@ title: project-AURA
 
 # Project AURA - e21-3yp-Project-AURA
 <p align="center">
-  <img src="docs/images/logo.png" alt="AURA Logo" width="200"/>
+  <img src="./docs/images/logo.png" alt="AURA Logo" width="200"/>
 </p
 ---
 
