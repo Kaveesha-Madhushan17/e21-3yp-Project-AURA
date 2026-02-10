@@ -54,13 +54,13 @@ The robot is built around high-performance embedded computing to support AI task
 
 | Component | Specification | Purpose |
 |-----------|---------------|---------|
-| **Main Controller** | Raspberry Pi 4 Model B (2GB) | Core processing, AI, & UI rendering |
+| **Main Controller** | Raspberry Pi 4 Model B (4GB) | Core processing, AI, & UI rendering |
 | **Display** | 7-inch Capacitive Touch Screen | User Interface for ordering & games |
 | **Camera** | Raspberry Pi Camera Module V2 | Face tracking & QR scanning |
 | **Actuators** | 2x MG996R Servo Motors | Pan & Tilt mechanism for head movement |
 | **Sensors** | PIR Motion Sensor | Presence detection & auto-wake |
 | **Power** | Li-ion Battery Pack (10,000mAh) | Portable power source |
-| **Audio** | USB Mic & Speaker | Voice interaction & alerts |
+| **Audio** | Speaker | interaction & alerts |
 
 ### Software Stack
 * **Robot Frontend:** Python (PyQt/Kivy) for the touch interface.
