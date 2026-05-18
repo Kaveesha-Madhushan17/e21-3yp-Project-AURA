@@ -4,6 +4,7 @@ import { useAppContext } from '../../context/AppContext';
 import { useRestaurant, ORDER_STATUS } from '../../context/RestaurantContext';
 import { getMenuImageSrc } from '../../utils/menuImages';
 import { orderMqtt } from '../../api/mqttclient';
+import { useNavigate } from "react-router-dom";
 
 // Import WebSocket helpers
 import { connectToRobot, sendOrderToRobot } from '../../api/robotWebSocket';
@@ -17,8 +18,6 @@ const CATS = [
   { id: 'desserts', label: 'Desserts', icon: IceCreamCone },
   { id: 'drinks', label: 'Drinks', icon: Coffee },
 ];
-
-
 
 const STATUS_CFG = {
   PENDING:   { label: 'Sent — Awaiting Kitchen',  icon: Clock,       color: 'text-sky-400',    bg: 'bg-sky-500/10',    ring: 'ring-sky-500/25'    },
@@ -112,6 +111,8 @@ function PayModal({ total, table, dark, onSuccess, onClose }) {
 export default function RobotUI() {
   const { session, logout, verifyCredentials, menuItems, theme, toggleTheme, refreshMenu } = useAppContext();
   const { placeOrder, getUnpaidOrders, getUnpaidTotal, getLatestOrder, markTablePaid } = useRestaurant();
+  
+  const navigate = useNavigate();
 
   // Subscribe to menu updates from MQTT (synced from AdminDashboard)
   useEffect(() => {
@@ -246,7 +247,8 @@ export default function RobotUI() {
   return (
     <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-300 ${tc.root}`}>
       {/* ── LEFT: MENU PANEL ── */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+      {/* Added 'relative' to this panel so we can put our floating banner here */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative">
         <div className={`flex-shrink-0 flex items-center gap-3 px-5 py-3 border-b ${tc.bar}`}>
           <div className="flex items-center gap-3 flex-shrink-0">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
@@ -274,7 +276,7 @@ export default function RobotUI() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+        <div className="flex-1 overflow-y-auto px-5 py-5 pb-24">
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {items.map(item => {
               const dQty = draft.find(i => i.id === item.id)?.quantity || 0;
@@ -311,6 +313,18 @@ export default function RobotUI() {
             })}
           </div>
         </div>
+
+        {/* 🎉 FLOATING ENTERTAINMENT BANNER 🎉 */}
+        {confirmed.length > 0 && !delivered && (
+          <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-50 w-max">
+            <button
+              onClick={() => navigate("/entertain")}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-4 px-8 rounded-full shadow-[0_10px_40px_rgba(124,58,237,0.5)] font-bold text-base flex items-center justify-center gap-3 hover:scale-105 active:scale-95 transition-all animate-bounce ring-4 ring-purple-500/30 cursor-pointer"
+            >
+              🎧 Listen to music while playing games! ✨
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── RIGHT: BILLING PANEL ── */}
@@ -325,6 +339,8 @@ export default function RobotUI() {
               <p className={`text-xs ${tc.st}`}>{delivered ? 'Need more? Add items & send add-on!' : `Grand Total: $${grand.toFixed(2)}`}</p>
             </div>
           </div>
+          
+          {/* Live Status Tracker */}
           {sCfg && (
             <div className={`mt-3 flex items-center gap-3 px-4 py-3 rounded-2xl ring-1 ${sCfg.ring} ${sCfg.bg}`}>
               <sCfg.icon size={18} className={sCfg.color}/>

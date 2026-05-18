@@ -1,15 +1,6 @@
 /**
  * ============================================================
- *  AURA Restaurant System — Root App Component
- * ============================================================
- *  Routing logic:
- *    - No session      → LoginPage  (public)
- *    - role = 'table'  → RobotUI    (NO navbar — customer sees only ordering screen)
- *    - role = 'admin'  → AdminDashboard  (with navbar)
- *    - role = 'kitchen'→ KitchenDisplay  (with navbar)
- *
- *  The BrowserRouter is kept so that deep links still work for
- *  admin/kitchen views. Table view ignores URL entirely.
+ * AURA Restaurant System — Root App Component
  * ============================================================
  */
 
@@ -21,70 +12,75 @@ import LoginPage from './pages/LoginPage/LoginPage';
 import RobotUI from './pages/RobotUI/RobotUI';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import KitchenDisplay from './pages/KitchenDisplay/KitchenDisplay';
+import EntertainmentHub from "./pages/EntertainmentHub/EntertainmentHub";
 
 // ── Protected route shell ─────────────────────────────────────────────────────
-// Shows navbar only for staff roles (admin / kitchen), not for table customers.
 function AppShell() {
   const { session } = useAppContext();
   const isAdmin = session?.role === 'admin';
   const isKitchen = session?.role === 'kitchen';
-  //console.log('Current session:', session.role);
 
   // Not authenticated → always show Login
   if (!session) return <LoginPage />;
 
-  // Table role → full-screen ordering UI, no navbar, no back navigation
+  // ── TABLE ROLE (Full screen, no navbar) ──
   if (session.role === 'table') {
     return (
       <div className="min-h-screen bg-[#0f0f0f]">
-        <RobotUI />
+        <Routes>
+          <Route path="/" element={<RobotUI />} />
+          <Route path="/robot" element={<RobotUI />} />
+          <Route path="/entertain" element={<EntertainmentHub />} />
+          {/* Security: If table types anything else (like /admin), send back to robot */}
+          <Route path="*" element={<Navigate to="/robot" replace />} />
+        </Routes>
       </div>
     );
   }
 
-  // Admin / Kitchen → standard layout with navbar
+  // ── ADMIN / KITCHEN ROLE (Standard layout with navbar) ──
   return (
-    <Router>
-      <div className="min-h-screen bg-dark-950 bg-grid">
-        <Navbar />
-        <main>
-          <Routes>
-            {/* Role-aware root redirect */}
-            <Route path="/" element={<Navigate to={isAdmin ? '/admin' : '/kitchen'} replace />} />
+    <div className="min-h-screen bg-dark-950 bg-grid">
+      <Navbar />
+      <main>
+        <Routes>
+          {/* Role-aware root redirect */}
+          <Route path="/" element={<Navigate to={isAdmin ? '/admin' : '/kitchen'} replace />} />
 
-            {/* [API ENDPOINT]: GET /api/v1/auth/me */}
-            {/* [DATA SYNC]: Role guard keeps staff users on authorized pages even if browser restores an old URL. */}
-            {isAdmin && (
-              <>
-                <Route path="/admin" element={<AdminDashboard />} />
-                <Route path="/kitchen" element={<KitchenDisplay />} />
-              </>
-            )}
+          {isAdmin && (
+            <>
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/kitchen" element={<KitchenDisplay />} />
+            </>
+          )}
 
-            {isKitchen && (
-              <>
-                <Route path="/kitchen" element={<KitchenDisplay />} />
-                <Route path="/admin" element={<Navigate to="/kitchen" replace />} />
-              </>
-            )}
+          {isKitchen && (
+            <>
+              <Route path="/kitchen" element={<KitchenDisplay />} />
+              <Route path="/admin" element={<Navigate to="/kitchen" replace />} />
+            </>
+          )}
 
-            {/* Catch-all keeps users within role-scoped pages */}
-            <Route path="*" element={<Navigate to={isAdmin ? '/admin' : '/kitchen'} replace />} />
-          </Routes>
-        </main>
-      </div>
-    </Router>
+          {/* Catch-all keeps users within role-scoped pages */}
+          <Route path="*" element={<Navigate to={isAdmin ? '/admin' : '/kitchen'} replace />} />
+        </Routes>
+      </main>
+    </div>
   );
 }
 
 // ── Root export ───────────────────────────────────────────────────────────────
 function App() {
+  // 🚀 By putting the Router here at the very top, React never gets confused 
+  // when you log out of a Table and log into an Admin!
   return (
-    <AppProvider>
-      <RestaurantProvider>
-        <AppShell />
-      </RestaurantProvider>
-    </AppProvider>
+    <Router>
+      <AppProvider>
+        <RestaurantProvider>
+          <AppShell />
+        </RestaurantProvider>
+      </AppProvider>
+    </Router>
   );
 }
 
