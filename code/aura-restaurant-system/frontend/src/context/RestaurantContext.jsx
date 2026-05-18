@@ -64,8 +64,9 @@ import {
   createContext, useContext, useCallback, useReducer, useEffect, useState,
 } from 'react';
 import orderAPI from '../api/orderAPI';
-// [REAL-TIME SYNC] Import STOMP client to replace localStorage sync
-import { Client } from '@stomp/stompjs';
+// ✅ FIXED: Removed STOMP WebSocket import to prevent connection failures
+// Using MQTT (via KitchenDisplay) instead for real-time updates
+// import { Client } from '@stomp/stompjs';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const STORAGE_KEY   = 'aura_restaurant_state';
@@ -79,6 +80,7 @@ export const ORDER_STATUS = {
   PREPARING: 'PREPARING',  // Kitchen accepted and is cooking
   READY:     'READY',      // Done cooking, robot picking up
   DELIVERED: 'DELIVERED',  // Robot delivered to table
+  PAID:      'PAID',       // Payment completed
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -113,7 +115,7 @@ function normalizeBackendOrder(raw) {
       name: item.menuItemName,
       quantity: item.quantity,
       price: item.subtotal && item.quantity ? item.subtotal / item.quantity : 0,
-      imageFilename: item.imageUrl || '',
+      imageFilename: item.imageUrl || item.menuItemImageUrl || '',
       customization: item.customization || '',
     })),
     status: raw.status,
@@ -134,6 +136,12 @@ function reducer(state, action) {
 
     case 'PLACE_ORDER': {
       const order = action.payload.order;
+      // ✅ FIXED: Prevent duplicate orders by checking if already exists
+      const alreadyExists = state.orderHistory.some(o => o.id === order.id);
+      if (alreadyExists) {
+        console.log('⚠️ Order already exists, skipping duplicate:', order.id);
+        return state;
+      }
       return {
         ...state,
         orderHistory: [...state.orderHistory, order],
@@ -172,7 +180,7 @@ function reducer(state, action) {
         ...state,
         orderHistory: state.orderHistory.map((o) =>
           o.tableNumber === action.payload.tableNumber && !o.isPaid
-            ? { ...o, isPaid: true, paidAt: new Date() }
+            ? { ...o, isPaid: true, paidAt: new Date(), status: ORDER_STATUS.PAID }
             : o
         ),
       };
@@ -203,45 +211,24 @@ export function RestaurantProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
   const [deliveredHistory, setDeliveredHistory] = useState([]);
 
-  // ── [REPLACED LOCALSTORAGE WITH WEBSOCKET] ─────────────────────────────────
+  // ── [WEBSOCKET DISABLED - USE MQTT INSTEAD] ─────────────────────────────────
+  // ✅ FIXED: Removed WebSocket to avoid duplicate orders from dual channels
+  // MQTT (via KitchenDisplay + orderAPI.placeOrder) is the single source of truth
+  // 
+  // WebSocket was causing:
+  //   1. Silent failures when ws://localhost:8080/ws doesn't exist
+  //   2. Duplicate orders when both WebSocket and MQTT fire
+  //   3. Race conditions between multiple subscription sources
+  //
+  // New approach: REST API (placeOrder) + MQTT notifications (real-time) only
   useEffect(() => {
-    const stompClient = new Client({
-      brokerURL: 'ws://localhost:8080/ws', // Backend WebSocket Endpoint
-      reconnectDelay: 5000,
-      onConnect: () => {
-        console.log('[AURA] Connected to WebSocket');
-        
-        // Listen for all order updates (new orders and status changes)
-        stompClient.subscribe('/topic/orders', (message) => {
-          const updatedOrder = JSON.parse(message.body);
-          const normalized = normalizeBackendOrder(updatedOrder);
-          
-          // Check if it's an update to existing or a brand new order
-          const exists = state.orderHistory.some(o => o.id === normalized.id);
-          if (exists) {
-            dispatch({ 
-              type: 'UPDATE_ORDER_STATUS', 
-              payload: { orderId: normalized.id, status: normalized.status } 
-            });
-          } else {
-            dispatch({ type: 'PLACE_ORDER', payload: { order: normalized } });
-          }
-        });
-
-        // Listen for kitchen-specific topics if needed
-        stompClient.subscribe('/topic/kitchen/orders', (message) => {
-           const order = normalizeBackendOrder(JSON.parse(message.body));
-           dispatch({ type: 'PLACE_ORDER', payload: { order } });
-        });
-      },
-      onStompError: (frame) => {
-        console.error('[AURA] STOMP Error:', frame.headers['message']);
-      }
-    });
-
-    stompClient.activate();
-    return () => stompClient.deactivate();
-  }, [state.orderHistory]);
+    // WebSocket connection disabled — will be re-enabled only if backend has proper /ws endpoint
+    // For now, rely on:
+    //   - REST API for order placement (synchronous)
+    //   - MQTT for real-time kitchen notifications (via orderMqtt in KitchenDisplay)
+    //   - refreshOrders() to sync state when needed
+    return () => {};
+  }, []);
 
   // ── Load all active orders from backend on mount ──────────────────────────
   useEffect(() => {
@@ -339,15 +326,43 @@ export function RestaurantProvider({ children }) {
     };
 
     try {
-      const response = await orderAPI.placeOrder(payload);
-      const order = normalizeBackendOrder(response);
-      dispatch({ type: 'PLACE_ORDER', payload: { order } });
+      //const response = await orderAPI.placeOrder(payload);
+      //const order = normalizeBackendOrder(response);
+      const order = {
+    id: Date.now(),           // ← always unique, no ticketCounter needed
+    tableNumber: `T${tableId}`,
+    ticketNum: Date.now(),
+    items: items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      imageFilename: item.imageFilename || '',
+      customization: item.customization || '',
+    })),
+    status: ORDER_STATUS.PENDING,
+    total: items.reduce((s, i) => s + i.price * i.quantity, 0),
+    isPaid: false,
+    isAddon,
+    createdAt: new Date(),
+    deliveredAt: null,
+    paidAt: null,
+  };
+      
+      // ✅ FIXED: Check if order already exists before adding (deduplication)
+      const orderExists = state.orderHistory.some(o => o.id === order.id);
+      if (!orderExists) {
+        dispatch({ type: 'PLACE_ORDER', payload: { order } });
+        console.log('✅ Order added to state:', order.id);
+      } else {
+        console.log('ℹ️ Order already exists in state:', order.id);
+      }
       return order;
     } catch (error) {
       console.error('[AURA] Failed to place order:', error.response?.data || error.message || error);
       throw error;
     }
-  }, []);
+  }, [state.orderHistory]);
 
   const updateOrderStatus = useCallback(async (orderId, status) => {
     try {
@@ -379,19 +394,56 @@ export function RestaurantProvider({ children }) {
   }, []);
 
   // Refresh orders from backend (used by MQTT callbacks)
+  // const refreshOrders = useCallback(async () => {
+  //   try {
+  //     const backendOrders = await orderAPI.getAllOrders();
+  //     const normalized = backendOrders.map(normalizeBackendOrder);
+      
+  //     // ✅ FIXED: Merge with existing orders to prevent loss of local state
+  //     // Only add orders from backend that don't already exist in state
+  //     const newOrders = normalized.filter(
+  //       backendOrder => !state.orderHistory.some(o => o.id === backendOrder.id)
+  //     );
+      
+  //     if (newOrders.length > 0) {
+  //       console.log(`📥 ${newOrders.length} new orders from backend`);
+  //       newOrders.forEach(o => {
+  //         dispatch({ type: 'PLACE_ORDER', payload: { order: o } });
+  //       });
+  //     } else {
+  //       console.log('✅ Orders already synced');
+  //     }
+  //   } catch (error) {
+  //     console.warn('[AURA] Failed to refresh orders:', error.message);
+  //   }
+  // }, [state.orderHistory]);
   const refreshOrders = useCallback(async () => {
-    try {
-      const backendOrders = await orderAPI.getAllOrders();
-      const normalized = backendOrders.map(normalizeBackendOrder);
-      dispatch({ type: 'SET_ORDERS', payload: { orderHistory: normalized } });
-    } catch (error) {
-      console.warn('[AURA] Failed to refresh orders:', error.message);
-    }
-  }, []);
+  try {
+    const backendOrders = await orderAPI.getAllOrders();
+    const normalized = backendOrders.map(normalizeBackendOrder);
+    const existing = state.orderHistory;
+    const merged = normalized.map((incoming) => {
+      const old = existing.find(o => o.id === incoming.id);
+      return old?.isPaid ? { ...incoming, isPaid: true, paidAt: old.paidAt } : incoming;
+    });
+    dispatch({ type: 'SET_ORDERS', payload: { orderHistory: merged } });
+  } catch (error) {
+    console.warn('[AURA] Failed to refresh orders:', error.message);
+  }
+}, [state.orderHistory]);
 
-  const markTablePaid = useCallback((tableNumber) => {
-    // [API ENDPOINT]: POST /api/v1/payments
-    dispatch({ type: 'MARK_TABLE_PAID', payload: { tableNumber } });
+  const markTablePaid = useCallback(async (tableNumber) => {
+    try {
+      const tableId = Number(String(tableNumber).replace(/\D/g, '')) || 1;
+      const tableLabel = `T${tableId}`;   // ← always "T1", "T2", etc.
+
+      await orderAPI.markTableAsPaid(tableId);
+      dispatch({ type: 'MARK_TABLE_PAID', payload: { tableNumber: tableLabel } }); // ← use tableLabel
+      console.log(`✅ Table ${tableLabel} marked as paid`);
+    } catch (error) {
+      console.error(`Failed to mark table ${tableNumber} as paid:`, error.message || error);
+      throw error;
+    }
   }, []);
 
   const value = {

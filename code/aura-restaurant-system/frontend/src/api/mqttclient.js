@@ -9,6 +9,8 @@ class KitchenMqttService {
       onNewOrder: [],
       onOrderStatusUpdate: [],
       onMenuUpdate: [],
+      onDashboardStats: [],
+      onRobotFleetUpdate: [],
       onError: [],
     };
   }
@@ -17,17 +19,22 @@ class KitchenMqttService {
     if (this.connected) return;
 
     // WebSocket port 9001 — not TCP 1883
-    this.client = mqtt.connect('ws://localhost:9001');
+    this.client = mqtt.connect('ws://10.30.3.193:9001', {
+      reconnectPeriod: 5000,
+      connectTimeout: 10000,
+    });
 
     this.client.on('connect', () => {
       console.log('✅ MQTT connected via WebSocket');
       this.connected = true;
 
-      // Subscribe to kitchen topic
-      this.client.subscribe('aura/kitchen/new-order');
+      // Subscribe to kitchen topic — FIXED: must match backend topic exactly
+      this.client.subscribe('aura/kitchen/update-order');  // ← Backend publishes here
       this.client.subscribe('aura/table/+/order/response');
-      // Subscribe to menu updates
       this.client.subscribe('aura/menu/updated');
+      // Subscribe to dashboard real-time stats
+      this.client.subscribe('aura/admin/stats');
+      this.client.subscribe('aura/admin/robots');
     });
 
     this.client.on('message', (topic, message) => {
@@ -35,12 +42,18 @@ class KitchenMqttService {
         const data = JSON.parse(message.toString());
         console.log('📦 MQTT message received:', topic, data);
 
+        // ✅ FIXED: Now correctly matches the backend topic
         if (topic === 'aura/kitchen/update-order') {
+          console.log('🔔 New order notification via MQTT');
           this.listeners.onNewOrder.forEach(cb => cb(data));
         } else if (topic.includes('/order/response')) {
           this.listeners.onOrderStatusUpdate.forEach(cb => cb(data));
         } else if (topic === 'aura/menu/updated') {
           this.listeners.onMenuUpdate.forEach(cb => cb(data));
+        } else if (topic === 'aura/admin/stats') {
+          this.listeners.onDashboardStats.forEach(cb => cb(data));
+        } else if (topic === 'aura/admin/robots') {
+          this.listeners.onRobotFleetUpdate.forEach(cb => cb(data));
         }
       } catch (e) {
         console.error('Failed to parse MQTT message:', e);
@@ -55,6 +68,11 @@ class KitchenMqttService {
 
     this.client.on('reconnect', () => {
       console.log('🔄 MQTT reconnecting...');
+    });
+
+    this.client.on('offline', () => {
+      console.warn('⚠️ MQTT offline');
+      this.connected = false;
     });
   }
 
@@ -79,6 +97,22 @@ class KitchenMqttService {
     return () => {
       this.listeners.onMenuUpdate =
         this.listeners.onMenuUpdate.filter(cb => cb !== callback);
+    };
+  }
+
+  onDashboardStats(callback) {
+    this.listeners.onDashboardStats.push(callback);
+    return () => {
+      this.listeners.onDashboardStats =
+        this.listeners.onDashboardStats.filter(cb => cb !== callback);
+    };
+  }
+
+  onRobotFleetUpdate(callback) {
+    this.listeners.onRobotFleetUpdate.push(callback);
+    return () => {
+      this.listeners.onRobotFleetUpdate =
+        this.listeners.onRobotFleetUpdate.filter(cb => cb !== callback);
     };
   }
 

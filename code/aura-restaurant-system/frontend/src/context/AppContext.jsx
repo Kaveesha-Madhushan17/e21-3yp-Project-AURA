@@ -35,15 +35,16 @@ function loadInitialMenuItems() {
 
 function normalizeMenuItem(raw) {
   return {
-    id: raw.id || raw.menuItemId,
+    id: raw.menuItemId || raw.id,
     name: raw.name,
     description: raw.description || '',
     price: Number(raw.price) || 0,
     category: raw.category || 'popular',
-    imageFilename: raw.imageUrl || raw.imageFilename || DEFAULT_MENU_IMAGE_FILENAME,
-    time: raw.prepTime || raw.time || '15 min',
+    imageFilename: raw.imageUrl || raw.imageFilename || raw.menuItemImageUrl || DEFAULT_MENU_IMAGE_FILENAME,
+    time: raw.prepTimeMinutes || raw.time || '15 min',
     rating: raw.rating || 0,
     available: raw.available ?? raw.availability ?? true,
+    startTime: raw.orderTime || null,
   };
 }
 
@@ -338,6 +339,40 @@ const login = useCallback(async (username, password) => {
     return !!(cred && cred.password === password);
   }, []);
 
+  // ── New Customer Session ─────────────────────────────────────────────────
+// Stores sets of order IDs to hide per table — avoids clock skew issues
+const [hiddenOrderIds, setHiddenOrderIds] = useState(() => {
+  try {
+    const stored = localStorage.getItem('aura_hidden_order_ids');
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+});
+
+useEffect(() => {
+  try {
+    localStorage.setItem('aura_hidden_order_ids', JSON.stringify(hiddenOrderIds));
+  } catch {}
+}, [hiddenOrderIds]);
+
+// Pass the current visible order IDs to hide them for the next customer
+const startNewCustomer = useCallback((tableNumber, currentOrderIds = []) => {
+  if (!tableNumber) return false;
+  setHiddenOrderIds((prev) => {
+    const existing = Array.isArray(prev[tableNumber]) ? prev[tableNumber] : [];
+    return {
+      ...prev,
+      [tableNumber]: [...new Set([...existing, ...currentOrderIds])],
+    };
+  });
+  return true;
+}, []);
+
+const getHiddenOrderIds = useCallback((tableNumber) => {
+  return new Set(hiddenOrderIds[tableNumber] || []);
+}, [hiddenOrderIds]);
+
   // ── Logout ────────────────────────────────────────────────────────────────
   const logout = useCallback(async () => {
     try {
@@ -350,13 +385,14 @@ const login = useCallback(async (username, password) => {
   }, []);
 
   // ── Add Menu Item (Admin only) ────────────────────────────────────────────
-  const addMenuItem = useCallback(async (newItem) => {
+  const addMenuItem = useCallback(async (newItem, imageFile = null) => {
     const itemPayload = {
       name: newItem.name.trim(),
       description: (newItem.description || '').trim() || 'Freshly prepared signature dish from AURA kitchen.',
       price: Number(newItem.price) || 0,
       category: newItem.category || 'popular',
       availability: true,
+      // If using preset image, pass the filename; if uploading, let backend handle the file
       imageUrl: newItem.imageFilename && !isKnownMenuImage(newItem.imageFilename)
         ? newItem.imageFilename
         : undefined,
@@ -364,7 +400,8 @@ const login = useCallback(async (username, password) => {
     };
 
     try {
-      const rawItem = await menuAPI.createMenuItem(itemPayload, null);
+      // Pass the image file to the API (can be null for preset images)
+      const rawItem = await menuAPI.createMenuItem(itemPayload, imageFile);
       const itemWithId = normalizeMenuItem(rawItem);
       setMenuItems((prev) => [...prev, itemWithId]);
       return itemWithId;
@@ -402,6 +439,8 @@ const login = useCallback(async (username, password) => {
     login, logout, verifyCredentials,
     theme, toggleTheme,
     menuItems, addMenuItem, deleteMenuItem, refreshMenu,
+    // New Customer session management
+    startNewCustomer, getHiddenOrderIds,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
