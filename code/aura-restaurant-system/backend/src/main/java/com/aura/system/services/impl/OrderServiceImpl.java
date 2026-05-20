@@ -7,6 +7,8 @@ import com.aura.system.dtos.response.OrderResponse;
 import com.aura.system.entities.*;
 import com.aura.system.repositories.*;
 import com.aura.system.services.OrderService;
+import com.aura.system.services.DashboardStatsService;
+import com.aura.system.services.RobotFleetService;
 import com.aura.system.mqtt.MqttPublisher;
 import com.aura.system.mqtt.MqttGateway; // පියවර 01: Gateway එක Import කිරීම
 import com.fasterxml.jackson.databind.ObjectMapper; // JSON සඳහා
@@ -14,8 +16,11 @@ import com.fasterxml.jackson.databind.ObjectMapper; // JSON සඳහා
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.apache.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -38,6 +43,10 @@ public class OrderServiceImpl implements OrderService {
     // පියවර 01: MqttGateway සහ ObjectMapper Inject කිරීම (RequiredArgsConstructor නිසා final ලෙස යොදන්න)
     private final MqttGateway mqttGateway; 
     private final ObjectMapper objectMapper;
+    
+    // Dashboard stats publishing
+    private final DashboardStatsService dashboardStatsService;
+    private final RobotFleetService robotFleetService;
 
     // ── Place Order ──────────────────────────────────────────────────────────
 
@@ -89,6 +98,9 @@ public class OrderServiceImpl implements OrderService {
             );
             mqttPublisher.publish(topic, payload);
             log.info("Order placed & Kitchen notified | orderId={}", savedOrder.getOrderId());
+            
+            // Trigger dashboard stats update
+            dashboardStatsService.publishDashboardStats();
         } catch (Exception e) {
             log.error("Failed to notify kitchen: {}", e.getMessage());
         }
@@ -124,6 +136,9 @@ public class OrderServiceImpl implements OrderService {
                 order.getOrderId(), order.getTable().getTableId(), order.getTotalAmount(), newStatus
             );
             mqttPublisher.publish(kitchenTopic, kitchenPayload);
+            
+            // Trigger dashboard stats update
+            dashboardStatsService.publishDashboardStats();
         } catch (Exception e) {
             log.error("Kitchen MQTT fail: {}", e.getMessage());
         }
@@ -138,6 +153,11 @@ public class OrderServiceImpl implements OrderService {
             payloadMap.put("status", newStatus);
             
             String robotPayload = objectMapper.writeValueAsString(payloadMap);
+            
+            // If order delivered, increment robot delivery count
+            if ("DELIVERED".equals(newStatus)) {
+                robotFleetService.incrementRobotDeliveryCount(1); // TODO: Get actual robot ID from order
+            }
             mqttGateway.sendToMqtt(robotPayload, robotTopic);
             
             log.info("MQTT notification sent to Robot on topic: {}", robotTopic);
@@ -187,6 +207,7 @@ public class OrderServiceImpl implements OrderService {
                         .quantity(item.getQuantity())
                         .customization(item.getCustomization())
                         .subtotal(item.getSubtotal())
+                        .menuItemImageUrl(item.getMenuItem().getImageUrl())
                         .build())
                 .collect(Collectors.toList());
 
@@ -208,5 +229,35 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository.findDeliveredSince(since).stream()
                 .map(order -> buildResponse(order, orderItemRepository.findByOrderOrderId(order.getOrderId())))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public void markTableAsPaid(Integer tableId) {
+        List<Order> unpaidOrders = orderRepository.findUnpaidByTableId(tableId, "PAID");
+
+        if (unpaidOrders.isEmpty()) {
+            log.info("No unpaid orders found for table {}", tableId);
+            return;
+        }
+
+        unpaidOrders.forEach(order -> order.setStatus("PAID"));
+        orderRepository.saveAll(unpaidOrders);
+
+        // Notify all clients via MQTT
+        try {
+            String topic = "aura/kitchen/update-order";
+            String payload = String.format(
+                "{\"tableId\":%d,\"status\":\"PAID\",\"orderCount\":%d}",
+                tableId, unpaidOrders.size()
+            );
+            mqttPublisher.publish(topic, payload);
+            log.info("Table {} marked as paid | {} orders updated", tableId, unpaidOrders.size());
+
+            // Refresh dashboard stats (revenue increases when table pays)
+            dashboardStatsService.publishDashboardStats();
+        } catch (Exception e) {
+            log.error("Failed to publish MQTT after marking table {} as paid: {}", tableId, e.getMessage());
+        }
     }
 }
