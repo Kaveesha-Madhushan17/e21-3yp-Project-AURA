@@ -40,11 +40,12 @@ const ROBOTS_DATA = [
 
 // ── Category choices for menu form ───────────────────────────────────────────
 const MENU_CATEGORIES = [
-  { value: 'popular',  label: 'Popular'  },
-  { value: 'mains',    label: 'Mains'    },
-  { value: 'healthy',  label: 'Healthy'  },
+  { value: 'Rice',  label: 'Rice'  },
+  { value: 'Koththu',    label: 'Koththu' },
+  { value: 'Noodle',  label: 'Noodle'  },
   { value: 'desserts', label: 'Desserts' },
-  { value: 'drinks',   label: 'Drinks'   },
+  { value: 'Appetizers',   label: 'Appetizers' },
+  { value: 'Other',   label: 'Other' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -139,7 +140,7 @@ useEffect(() => {
     name: '',
     description: '',
     price: '',
-    category: 'popular',
+    category: 'Rice',
     imageFilename: AVAILABLE_MENU_IMAGES[0] || '',
     time: '15 min',
   });
@@ -203,7 +204,7 @@ useEffect(() => {
         name: '',
         description: '',
         price: '',
-        category: 'popular',
+        category: 'Rice',
         imageFilename: AVAILABLE_MENU_IMAGES[0] || '',
         time: '15 min',
       });
@@ -246,8 +247,8 @@ useEffect(() => {
             id="admin-logout-btn"
             onClick={logout}
             className="flex items-center gap-2 px-4 py-2 rounded-xl
-                       bg-white/5 hover:bg-white/10 text-dark-300 hover:text-white
-                       text-sm transition-all active:scale-95"
+                bg-white/5 hover:bg-white/10 text-dark-300 hover:text-white
+                text-sm transition-all active:scale-95"
           >
             <LogOut size={15} />
             Logout
