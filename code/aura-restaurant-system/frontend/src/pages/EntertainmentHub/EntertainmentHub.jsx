@@ -4,8 +4,6 @@ import { Sun, Moon } from "lucide-react";
 import { useAppContext } from "../../context/AppContext";
 
 // ─── Curated Jukebox Songs (EMBED-SAFE VERSIONS) ──────────────────────────────
-// ─── Curated Jukebox Songs (EMBED-SAFE VERSIONS) ──────────────────────────────
-// ─── Curated Jukebox Songs (EMBED-SAFE VERSIONS) ──────────────────────────────
 const SONGS = [
   // 🎉 Celebrations & Birthdays
   { id: "_z-1fTlSDF0", title: "Happy Birthday To You", artist: "Traditional", tag: "🎉 Celebration" },
@@ -25,35 +23,11 @@ const SONGS = [
   { id: "G90eRkPEjVo", title: "Vaseegara", artist: "Jonita Gandhi Cover", tag: "🇮🇳 Tamil" },
   { id: "11rbWfSMev0", title: "Tamil Lofi Chill Mix", artist: "eternaL Compilation", tag: "🇮🇳 Tamil" },
 
-  // 🎵 Chill & Pop Hits (The ones you confirmed are working!)
+  // 🎵 Chill & Pop Hits 
   { id: "2Vv-BfVoq4g", title: "Perfect", artist: "Ed Sheeran", tag: "🎵 Pop Hit" },
   { id: "RgKAFK5djSk", title: "See You Again", artist: "Wiz Khalifa", tag: "🎵 Pop Hit" },
   { id: "kJQP7kiw5Fk", title: "Despacito", artist: "Luis Fonsi", tag: "🎵 Pop Hit" },
 ];
-
-// ─── Word list ─────────────────────────────────────────────────────
-const WORDS = [
-  { word: "BURGER",   hint: "Popular sandwich with a beef patty" },
-  { word: "SUSHI",    hint: "Japanese dish with rice and fish" },
-  { word: "PASTA",    hint: "Italian staple food" },
-  { word: "RISOTTO",  hint: "Creamy Italian rice dish" },
-  { word: "TIRAMISU", hint: "Italian coffee dessert" },
-  { word: "SALMON",   hint: "Popular pink-fleshed fish" },
-  { word: "LOBSTER",  hint: "Luxury seafood" },
-  { word: "TRUFFLE",  hint: "Rare expensive fungus used in cooking" },
-  { word: "AVOCADO",  hint: "Creamy green fruit used in salads" },
-  { word: "SMOOTHIE", hint: "Blended fruit drink" },
-];
-
-// ─── Helpers ───────────────────────────────────────────────────────
-function scramble(w) {
-  let a = w.split("");
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a.join("");
-}
 
 const formatTime = (seconds) => {
   if (!seconds || isNaN(seconds)) return "0:00";
@@ -73,7 +47,6 @@ function MusicTab({ dark }) {
   const [selected, setSelected] = useState(null);
   const [ready, setReady] = useState(false);
   
-  // New States for Progress Bar
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
@@ -96,7 +69,6 @@ function MusicTab({ dark }) {
       events: { 
         onReady: (e) => e.target.setVolume(volume),
         onStateChange: (e) => {
-          // 1 = PLAYING, 2 = PAUSED, 0 = ENDED
           if (e.data === 1) {
             setPlaying(true);
             setDuration(e.target.getDuration());
@@ -106,10 +78,9 @@ function MusicTab({ dark }) {
           } else {
             setPlaying(false);
             clearInterval(timerRef.current);
-            if (e.data === 0) setCurrentTime(0); // Reset time when song ends
+            if (e.data === 0) setCurrentTime(0); 
           }
         },
-        // 🚀 THE NEW ERROR CATCHER IS HERE 🚀
         onError: (e) => {
           console.error("YouTube Player Error Code:", e.data);
           if (e.data === 101 || e.data === 150) {
@@ -119,12 +90,12 @@ function MusicTab({ dark }) {
           } else {
             alert("An unknown YouTube error occurred. Error Code: " + e.data);
           }
-          setPlaying(false); // Make sure the play button resets to the pause icon
+          setPlaying(false);
         }
       },
     });
 
-    return () => clearInterval(timerRef.current); // Cleanup on unmount
+    return () => clearInterval(timerRef.current);
   }, [ready]);
 
   const toggleSong = (index) => {
@@ -211,7 +182,6 @@ function MusicTab({ dark }) {
           </p>
         </div>
 
-        {/* --- Timeline / Seek Bar --- */}
         <div className={selected === null ? "opacity-30 pointer-events-none" : ""}>
           <div className="flex justify-between text-[10px] mb-1 font-medium" style={{ color: dark ? '#9ca3af' : '#6b7280' }}>
             <span>{formatTime(currentTime)}</span>
@@ -225,7 +195,6 @@ function MusicTab({ dark }) {
           />
         </div>
 
-        {/* --- Volume Bar --- */}
         <div className="flex items-center gap-3 mt-1">
           <span className={`text-[10px] font-medium w-12 ${dark ? "text-gray-400" : "text-gray-500"}`}>Vol: {volume}%</span>
           <input
@@ -488,58 +457,113 @@ function FoodMergeTab({ dark }) {
   );
 }
 
-// ─── 5. Word Scramble Tab ──────────────────────────────────────────
-function WordScrambleTab({ dark }) {
-  const [cur, setCur] = useState(null);
-  const [scrambled, setScrambled] = useState("");
-  const [input, setInput] = useState("");
-  const [status, setStatus] = useState({ msg: "Unscramble the food word!", ok: null });
+// ─── 5. Catch the Snack (HARD MODE) ──────────────────────────────
+function CatchSnackTab({ dark }) {
+  const [score, setScore] = useState(0);
+  const [activeIdx, setActiveIdx] = useState(null);
+  const [playing, setPlaying] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0);
+  
+  const [currentEmoji, setCurrentEmoji] = useState("🍕");
+  const [isBomb, setIsBomb] = useState(false);
+  const [feedback, setFeedback] = useState("");
 
-  const next = () => {
-    const w = WORDS[Math.floor(Math.random() * WORDS.length)];
-    let s = scramble(w.word);
-    while (s === w.word) s = scramble(w.word);
-    setCur(w); setScrambled(s); setInput(""); setStatus({ msg: "Unscramble the food word!", ok: null });
+  const EMOJIS = ["🍔", "🍕", "🌮", "🍣", "🍩", "🍦", "🍇", "🍓"];
+
+  const startGame = () => {
+    setScore(0);
+    setTimeLeft(30);
+    setPlaying(true);
+    setFeedback("");
+    setActiveIdx(Math.floor(Math.random() * 9));
   };
 
-  useEffect(() => { next(); }, []);
+  useEffect(() => {
+    let timer, moleTimer;
+    if (playing && timeLeft > 0) {
+      timer = setTimeout(() => setTimeLeft(l => l - 1), 1000);
+      
+      // PRO MODE: Speeds up much faster! Starts at 900ms, drops to 300ms.
+      const speed = Math.max(300, 900 - score * 30);
+      
+      moleTimer = setTimeout(() => {
+        setActiveIdx(Math.floor(Math.random() * 9));
+        
+        // 25% chance to spawn a Bomb!
+        const bombChance = Math.random() < 0.25;
+        setIsBomb(bombChance);
+        setCurrentEmoji(bombChance ? "💣" : EMOJIS[Math.floor(Math.random() * EMOJIS.length)]);
+        setFeedback(""); 
+      }, speed);
+      
+    } else if (timeLeft === 0) {
+      setPlaying(false);
+      setActiveIdx(null);
+      if (score > 0) setFeedback("Time's up!");
+    }
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(moleTimer);
+    }
+  }, [playing, timeLeft, score]);
 
-  const check = (val) => {
-    setInput(val);
-    if (val.toUpperCase().trim() === cur?.word) {
-      setStatus({ msg: "Correct! Well done! 🎉", ok: true });
-      setTimeout(next, 1200);
+  const handleTap = (idx) => {
+    if (idx === activeIdx && playing) {
+      if (isBomb) {
+        setScore(s => Math.max(0, s - 5)); // Penalty!
+        setFeedback("💥 -5 Points!");
+      } else {
+        setScore(s => s + 1);
+        setFeedback("✅ +1");
+      }
+      setActiveIdx(null); // Hide it immediately upon catching!
     }
   };
 
-  const reveal = () => {
-    setScrambled(cur?.word || "");
-    setStatus({ msg: `The answer was: ${cur?.word}`, ok: false });
-    setTimeout(next, 2000);
-  };
-
   return (
-    <div className="space-y-4 pt-4">
-      <p className={`text-sm text-center font-medium ${status.ok === true ? "text-green-500" : status.ok === false ? "text-red-500" : (dark ? "text-gray-400" : "text-gray-500")}`}>
-        {status.msg}
-      </p>
-      <p className={`text-3xl font-bold tracking-[12px] text-center ${dark ? "text-white" : "text-gray-800"}`}>{scrambled}</p>
-      <p className={`text-xs text-center ${dark ? "text-gray-400" : "text-gray-400"}`}>{cur?.hint}</p>
-      <input
-        type="text" value={input}
-        onChange={(e) => check(e.target.value)}
-        placeholder="Type your answer..."
-        className={`w-full border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 ${
-          dark ? "bg-[#0d0d0d] border-white/20 text-white focus:ring-indigo-500" : "bg-white border-gray-200 text-gray-900 focus:ring-indigo-300"
-        }`}
-      />
-      <div className="flex gap-2 justify-center">
-        <button onClick={next} className={`text-sm px-4 py-2 rounded-lg border font-medium ${
-          dark ? "border-white/20 hover:bg-white/10 text-gray-300" : "border-gray-200 hover:bg-gray-50 text-gray-700"
-        }`}>New Word</button>
-        <button onClick={reveal} className={`text-sm px-4 py-2 rounded-lg border font-medium ${
-          dark ? "border-white/20 hover:bg-white/10 text-gray-300" : "border-gray-200 hover:bg-gray-50 text-gray-700"
-        }`}>Reveal Answer</button>
+    <div className="space-y-4 pt-2">
+      <div className="flex justify-between items-center px-2">
+        <p className={`text-sm font-bold ${
+          feedback.includes("💥") ? "text-red-500 animate-pulse" : 
+          feedback.includes("✅") ? "text-green-500" : 
+          dark ? "text-gray-300" : "text-gray-600"
+        }`}>
+          {playing ? (feedback || "Watch out for bombs! 💣") : feedback || "Catch the snacks!"}
+        </p>
+        <div className="flex gap-4 text-sm">
+          <span className={dark ? "text-gray-400" : "text-gray-500"}>Time: <strong className={dark ? "text-white" : ""}>{timeLeft}s</strong></span>
+          <span className={dark ? "text-gray-400" : "text-gray-500"}>Score: <strong className={dark ? "text-white" : ""}>{score}</strong></span>
+        </div>
+      </div>
+
+      <div className={`grid grid-cols-3 gap-2 p-3 rounded-2xl max-w-[280px] mx-auto border ${dark ? "bg-white/5 border-white/10" : "bg-gray-50 border-gray-100"}`}>
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          <button
+            key={i}
+            onClick={() => handleTap(i)}
+            disabled={!playing}
+            className={`aspect-square rounded-xl border flex items-center justify-center overflow-hidden transition-colors ${
+              dark ? "bg-[#1a1a1a] border-white/10" : "bg-white border-gray-200"
+            }`}
+          >
+            <span className={`text-4xl transition-transform duration-100 ${
+              activeIdx === i ? "scale-100" : "scale-0"
+            }`}>
+              {currentEmoji}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="text-center mt-2">
+        <button 
+          onClick={startGame}
+          className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm ${
+            dark ? "bg-indigo-500 hover:bg-indigo-400 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"
+          }`}
+        >
+          {score > 0 && !playing ? "Play Again" : "Start Catching"}
+        </button>
       </div>
     </div>
   );
@@ -551,28 +575,25 @@ const TABS = [
   { id: "burger", label: "🍔 Burger Builder" }, 
   { id: "memory", label: "🧠 Food Match" },     
   { id: "merge",  label: "🍉 Food Merge" },     
-  { id: "word",   label: "🔤 Word Scramble" },  
+  { id: "catch",  label: "🕹️ Catch Snack" },  
 ];
 
 export default function EntertainmentHub() {
   const [tab, setTab] = useState("music");
   const navigate = useNavigate();
   
-  // Bring in the global theme context from AURA
   const { theme, toggleTheme } = useAppContext();
   const isDark = theme === 'dark';
 
   return (
     <div className={`min-h-screen p-4 font-sans transition-colors duration-300 ${isDark ? 'bg-[#0d0d0d]' : 'bg-gray-100'}`}>
       <div className="max-w-lg mx-auto mt-4">
-        {/* Header */}
         <div className="mb-6 flex justify-between items-start">
           <div>
             <h1 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>🎉 AURA Hub</h1>
             <p className={`text-sm mt-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Have fun while your food is prepared!</p>
           </div>
           
-          {/* Action Buttons (Toggle Theme + Back to Menu) */}
           <div className="flex items-center gap-2">
             <button 
               onClick={toggleTheme} 
@@ -593,7 +614,6 @@ export default function EntertainmentHub() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 flex-wrap mb-6">
           {TABS.map((t) => (
             <button
@@ -612,16 +632,14 @@ export default function EntertainmentHub() {
           ))}
         </div>
 
-        {/* Content Box */}
         <div className={`rounded-3xl border p-6 shadow-sm min-h-[460px] transition-colors duration-300 ${
           isDark ? 'bg-[#1a1a1a] border-white/5' : 'bg-white border-gray-100'
         }`}>
-          {/* Using hidden classes to prevent components from unmounting */}
           <div className={tab === "music" ? "block h-full" : "hidden"}><MusicTab dark={isDark} /></div>
           <div className={tab === "burger" ? "block" : "hidden"}><BurgerBuilderTab dark={isDark} /></div> 
           <div className={tab === "memory" ? "block" : "hidden"}><MemoryMatchTab dark={isDark} /></div>   
           <div className={tab === "merge" ? "block" : "hidden"}><FoodMergeTab dark={isDark} /></div>     
-          <div className={tab === "word" ? "block" : "hidden"}><WordScrambleTab dark={isDark} /></div>
+          <div className={tab === "catch" ? "block" : "hidden"}><CatchSnackTab dark={isDark} /></div>
         </div>
       </div>
     </div>
