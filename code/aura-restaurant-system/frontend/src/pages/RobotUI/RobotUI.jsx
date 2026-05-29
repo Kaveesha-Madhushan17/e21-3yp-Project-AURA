@@ -12,6 +12,18 @@ import OrderHistoryModal from "../../components/OrderHistoryModal/OrderHistoryMo
 
 
 // ─── Categories ───────────────────────────────────────────────────────────────
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { ChefHat, Flame, Leaf, IceCreamCone, Coffee, UtensilsCrossed, Plus, Minus, ShoppingBag, Send, CreditCard, Trash2, LogOut, Sun, Moon, Lock, X, Clock, Bike, Sparkles, PartyPopper, CheckCircle2, Loader2, User } from 'lucide-react';
+import { useAppContext } from '../../context/AppContext';
+import { useRestaurant, ORDER_STATUS } from '../../context/RestaurantContext';
+import { getMenuImageSrc } from '../../utils/menuImages';
+import { orderMqtt } from '../../api/mqttclient';
+import { useNavigate } from "react-router-dom";
+
+// Import WebSocket helpers
+import { connectToRobot, sendOrderToRobot } from '../../api/robotWebSocket';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 const CATS = [
   { id: 'all',        label: 'All',        icon: ChefHat        },
   { id: 'Appetizers', label: 'Appetizers', icon: IceCreamCone   },
@@ -32,6 +44,13 @@ export default function RobotUI() {
   } = useAppContext();
 
   const { placeOrder } = useRestaurant();
+const STATUS_CFG = {
+  PENDING:   { label: 'Sent — Awaiting Kitchen',  icon: Clock,       color: 'text-sky-400',    bg: 'bg-sky-500/10',    ring: 'ring-sky-500/25'    },
+  PREPARING: { label: 'Kitchen is Preparing…',    icon: ChefHat,     color: 'text-amber-400',  bg: 'bg-amber-500/10',  ring: 'ring-amber-500/25'  },
+  READY:     { label: 'Robot is Delivering! 🤖',  icon: Bike,        color: 'text-orange-400', bg: 'bg-orange-500/10', ring: 'ring-orange-500/25' },
+  DELIVERED: { label: 'Delivered! Enjoy 🎉',      icon: PartyPopper, color: 'text-emerald-400',bg: 'bg-emerald-500/10',ring: 'ring-emerald-500/25'},
+  PAID:      { label: 'Payment Completed! 💳',    icon: CreditCard,  color: 'text-green-400',  bg: 'bg-green-500/10',  ring: 'ring-green-500/25'  },
+};
 
   const D = theme === 'dark';
 
@@ -53,6 +72,16 @@ export default function RobotUI() {
   const [showCart, setShowCart]       = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);     // success screen
   const [orderLoading, setOrderLoading] = useState(false);
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
+export default function RobotUI() {
+  const { session, logout, verifyCredentials, menuItems, theme, toggleTheme, refreshMenu, getCustomerSessionStart, startNewCustomer,getHiddenOrderIds } = useAppContext();
+  const { placeOrder, getUnpaidOrders, getUnpaidTotal, getLatestOrder, markTablePaid } = useRestaurant();
+  
+  const navigate = useNavigate();
+  const [ordering, setOrdering] = useState(false);
+  const [, forceUpdate] = useState(0);
 
   // ── MQTT ──
   useEffect(() => {
@@ -61,7 +90,29 @@ export default function RobotUI() {
     return () => unsub();
   }, [refreshMenu]);
 
+
+const dark       = theme === 'dark';
+  const table      = session?.tableNumber || 'T?';
+
+  // Unpaid orders සහ hidden IDs ෆිල්ටර් කිරීමේ රොබෝ ලොජික් එක
+  const allUnpaidOrders = getUnpaidOrders(table);
+  const hiddenIds = getHiddenOrderIds(table);
+  const confirmed = allUnpaidOrders.filter(order => !hiddenIds.has(order.id));
+  console.log("-------------------", confirmed);
+
+  const confTotal  = confirmed.reduce((s, o) => s + o.total, 0);
+  const latest     = confirmed.length > 0 ? confirmed[confirmed.length - 1] : null;
+  const status     = latest?.status || null;
+  const sCfg       = status ? STATUS_CFG[status] : null;
+  const delivered  = status === ORDER_STATUS.DELIVERED;
+
+  // Incoming branch එකෙන් ආපු අලුත් සහ ඩියුප්ලිකේට් නොවන අත්‍යවශ්‍ය States විතරයි මෙතන තියෙන්නේ:
+  const [draft, setDraft]                   = useState([]);
+  const [showPay, setShowPay]               = useState(false);
+  const [upsellIndex, setUpsellIndex]       = useState(0);
+
   // ── Responsive items per page ──
+
   useEffect(() => {
     const calc = () => {
       const w = window.innerWidth;
@@ -185,17 +236,19 @@ export default function RobotUI() {
   };
 
   return (
-    <div className={`flex flex-col h-screen overflow-hidden font-sans transition-colors duration-300 ${tc.root}`}>
-
-      {/* ═══════════════════════════════════════════════════
-          TOP BAR
-      ═══════════════════════════════════════════════════ */}
-      <div className={`flex-shrink-0 flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-3 border-b ${tc.bar}`}>
-
-        {/* Logo */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
-            <ChefHat size={18} className="text-white"/>
+    <div className={`flex h-screen overflow-hidden font-sans transition-colors duration-300 ${tc.root}`}>
+      {/* ── LEFT: MENU PANEL ── */}
+      {/* Added 'relative' to this panel so we can put our floating banner here */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden relative">
+        <div className={`flex-shrink-0 flex items-center gap-3 px-5 py-3 border-b ${tc.bar}`}>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
+              <ChefHat size={20} className="text-white"/>
+            </div>
+            <div>
+              <p className={`font-display text-base font-bold leading-tight ${tc.tt}`}>AURA Menu</p>
+              <p className="text-xs text-orange-500 font-medium">{session?.displayName} — Touch to order</p>
+            </div>
           </div>
           <div>
             <p className={`font-display text-sm sm:text-base font-bold leading-tight ${tc.tt}`}>AURA Menu</p>
@@ -281,6 +334,8 @@ export default function RobotUI() {
 
         <div className="flex-1 overflow-hidden">
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4 h-full content-start">
+        <div className="flex-1 overflow-y-auto px-5 py-5 pb-24">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {items.map(item => {
               const cartQty = cart.find(c => c.id === item.id)?.quantity || 0;
               return (
@@ -338,28 +393,16 @@ export default function RobotUI() {
             })}
           </div>
         </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className={`flex-shrink-0 flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl border ${tc.pgBox}`}>
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-              className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-semibold transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${tc.pgBtn}`}>
-              ← Prev
-            </button>
-            <div className="flex items-center gap-1 sm:gap-1.5">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                <button key={page} onClick={() => setCurrentPage(page)}
-                  className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-bold transition-all active:scale-95
-                    ${currentPage === page ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
-                      : D ? 'bg-white/5 text-gray-400 hover:bg-white/15 hover:text-white border border-white/10'
-                           : 'bg-white text-gray-500 hover:bg-orange-50 hover:text-orange-500 border border-gray-200'}`}>
-                  {page}
-                </button>
-              ))}
-            </div>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-              className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-semibold transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${tc.pgBtn}`}>
-              Next →
+        
+        
+{/* 🎉 FLOATING ENTERTAINMENT BANNER 🎉 */}
+        {confirmed.length > 0 && !delivered && (
+          <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-50 w-max">
+            <button
+              onClick={() => navigate("/entertain")}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-4 px-8 rounded-full shadow-[0_10px_40px_rgba(124,58,237,0.5)] font-bold text-base flex items-center justify-center gap-3 hover:scale-105 active:scale-95 transition-all animate-bounce ring-4 ring-purple-500/30 cursor-pointer"
+            >
+              🎧 Listen to music while playing games! ✨
             </button>
           </div>
         )}
