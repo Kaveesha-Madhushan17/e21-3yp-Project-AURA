@@ -13,6 +13,8 @@ import RobotUI from './pages/RobotUI/RobotUI';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
 import KitchenDisplay from './pages/KitchenDisplay/KitchenDisplay';
 import EntertainmentHub from "./pages/EntertainmentHub/EntertainmentHub";
+import MusicPage  from './pages/EntertainmentHub/MusicPage';
+import GamesPage  from './pages/EntertainmentHub/GamesPage';
 
 // ── Protected route shell ─────────────────────────────────────────────────────
 function AppShell() {
@@ -33,6 +35,8 @@ function AppShell() {
           <Route path="/entertain" element={<EntertainmentHub />} />
           {/* Security: If table types anything else (like /admin), send back to robot */}
           <Route path="*" element={<Navigate to="/robot" replace />} />
+          <Route path="/entertain/music" element={<MusicPage />} />
+          <Route path="/entertain/games" element={<GamesPage />} />
         </Routes>
       </div>
     );

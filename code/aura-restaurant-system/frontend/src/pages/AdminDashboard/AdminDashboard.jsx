@@ -59,6 +59,7 @@ export default function AdminDashboard() {
     refreshOrders
   } = useRestaurant();
   const isAdmin = session?.role === 'admin';
+  const [waiterCalls, setWaiterCalls] = useState([]);
 
   // ── Real-time Stats State ────────────────────────────────────────────────
   const [realtimeStats, setRealtimeStats] = useState({
@@ -71,56 +72,63 @@ export default function AdminDashboard() {
   const [robotFleet, setRobotFleet] = useState(ROBOTS_DATA);
 
   // Subscribe to menu updates and real-time stats from MQTT
-useEffect(() => {
-  orderMqtt.connect();
+  useEffect(() => {
+    orderMqtt.connect();
 
-  const unsubMenu = orderMqtt.onMenuUpdate((data) => {
-    console.log('🍽️ Menu update received:', data);
-    refreshMenu();
-  });
+    const unsubMenu = orderMqtt.onMenuUpdate((data) => {
+      console.log('🍽️ Menu update received:', data);
+      refreshMenu();
+    });
 
-  const unsubStats = orderMqtt.onDashboardStats((data) => {
-    console.log('📊 Dashboard stats update received:', data);
-    setRealtimeStats((prev) => ({
-      ...prev,
-      confirmedRevenue: data.confirmedRevenue ?? prev.confirmedRevenue,
-      activeOrderCount: data.activeOrderCount ?? prev.activeOrderCount,
-      pendingTotal: data.pendingTotal ?? prev.pendingTotal,
-    }));
-  });
-
-  const unsubRobots = orderMqtt.onRobotFleetUpdate((data) => {
-    console.log('🤖 Robot fleet update received:', data);
-    if (data.robots && Array.isArray(data.robots)) {
-      setRobotFleet(data.robots);
-      const activeCount = data.robots.filter((r) => r.status !== 'charging').length;
+    const unsubStats = orderMqtt.onDashboardStats((data) => {
+      console.log('📊 Dashboard stats update received:', data);
       setRealtimeStats((prev) => ({
         ...prev,
-        robotsOnline: activeCount,
-        robotsTotal: data.robots.length,
+        confirmedRevenue: data.confirmedRevenue ?? prev.confirmedRevenue,
+        activeOrderCount: data.activeOrderCount ?? prev.activeOrderCount,
+        pendingTotal: data.pendingTotal ?? prev.pendingTotal,
       }));
-    }
-  });
+    });
 
-  // ← add these two
-  const unsubNewOrder = orderMqtt.onNewOrder(async (data) => {
-    console.log('🔔 New order received on admin dashboard:', data);
-    await refreshOrders();
-  });
+    const unsubRobots = orderMqtt.onRobotFleetUpdate((data) => {
+      console.log('🤖 Robot fleet update received:', data);
+      if (data.robots && Array.isArray(data.robots)) {
+        setRobotFleet(data.robots);
+        const activeCount = data.robots.filter((r) => r.status !== 'charging').length;
+        setRealtimeStats((prev) => ({
+          ...prev,
+          robotsOnline: activeCount,
+          robotsTotal: data.robots.length,
+        }));
+      }
+    });
 
-  const unsubStatusUpdate = orderMqtt.onOrderStatusUpdate(async (data) => {
-    console.log('🔄 Order status update on admin dashboard:', data);
-    await refreshOrders();
-  });
+    const unsubWaiter = orderMqtt.onWaiterCall((data) => {
+      setWaiterCalls(prev => [
+        { ...data, id: Date.now(), seen: false },
+        ...prev.slice(0, 9),
+      ]);
+    });
 
-  return () => {
-    unsubMenu();
-    unsubStats();
-    unsubRobots();
-    unsubNewOrder();       // ← cleanup
-    unsubStatusUpdate();   // ← cleanup
-  };
-}, [refreshMenu, refreshOrders]);  // ← add refreshOrders to deps
+    const unsubNewOrder = orderMqtt.onNewOrder(async (data) => {
+      console.log('🔔 New order received on admin dashboard:', data);
+      await refreshOrders();
+    });
+
+    const unsubStatusUpdate = orderMqtt.onOrderStatusUpdate(async (data) => {
+      console.log('🔄 Order status update on admin dashboard:', data);
+      await refreshOrders();
+    });
+
+    return () => {
+      unsubMenu();
+      unsubStats();
+      unsubRobots();
+      unsubNewOrder();       // ← cleanup
+      unsubStatusUpdate();   // ← cleanup
+      unsubWaiter();
+    };
+  }, [refreshMenu, refreshOrders]);  // ← add refreshOrders to deps
 
   // [API ENDPOINT]: GET /api/v1/admin/revenue?status=PAID
   // [DATA SYNC]: Revenue is derived only from paid tickets so kitchen placements never inflate earnings.
@@ -422,8 +430,88 @@ useEffect(() => {
                 </Card>
               </div>
             </div>
+
+
+            {/* ── Right Sidebar: Waiter Calls ── */}
+            <div className="w-72 flex-shrink-0 border-l border-white/5 flex flex-col bg-[#0d0d0d]">
+              
+              {/* Sidebar Header */}
+              <div className="px-4 py-4 border-b border-white/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🔔</span>
+                    <p className="font-bold text-white text-sm">Waiter Calls</p>
+                  </div>
+                  {waiterCalls.filter(c => !c.seen).length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 text-xs font-bold">
+                      {waiterCalls.filter(c => !c.seen).length} new
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Calls List */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {waiterCalls.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-700 py-10">
+                    <span className="text-3xl mb-2">🔔</span>
+                    <p className="text-xs text-center opacity-50">No waiter calls yet</p>
+                  </div>
+                ) : (
+                  waiterCalls.map(call => (
+                    <div
+                      key={call.id}
+                      className={`rounded-xl p-3 border transition-all ${
+                        call.seen
+                          ? 'bg-white/3 border-white/5'
+                          : 'bg-yellow-500/10 border-yellow-500/25'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-yellow-500/20 flex items-center justify-center text-xs font-bold text-yellow-400 flex-shrink-0">
+                            {call.tableNumber}
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold text-white">{call.message}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">
+                              {new Date(call.timestamp).toLocaleTimeString('en-US', {
+                                hour: '2-digit', minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                        {/* Mark as seen */}
+                        <button
+                          onClick={() => setWaiterCalls(prev =>
+                            prev.map(c => c.id === call.id ? { ...c, seen: true } : c)
+                          )}
+                          className="w-6 h-6 rounded-md bg-white/5 hover:bg-green-500/20 text-gray-600 hover:text-green-400 transition-all flex items-center justify-center flex-shrink-0 text-xs"
+                        >
+                          ✓
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Clear all button */}
+              {waiterCalls.length > 0 && (
+                <div className="p-3 border-t border-white/5">
+                  <button
+                    onClick={() => setWaiterCalls([])}
+                    className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-500 hover:text-gray-300 text-xs font-medium transition-all"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              )}
+
+            </div>
           </div>
-        )}
+        )};
+    
 
         {/* ══════════════════════ TAB: MANAGE MENU ══════════════════════ */}
         {activeTab === 'menu' && (

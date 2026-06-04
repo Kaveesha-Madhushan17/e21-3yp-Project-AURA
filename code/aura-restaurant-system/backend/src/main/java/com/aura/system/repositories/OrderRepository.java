@@ -23,6 +23,8 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     // Find orders above a certain total amount
     List<Order> findByTotalAmountGreaterThanEqual(Float amount);
 
+    List<Order> findByWalkInSessionId(Long walkInSessionId);
+
     // Custom query — find today's orders
     @Query("SELECT o FROM Order o WHERE o.orderTime >= :startOfDay AND o.orderTime < :endOfDay")
     List<Order> findTodaysOrders(

@@ -64,6 +64,14 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getDeliveredHistory(hours));
 
     }
+
+    // GET /api/orders/session/{sessionId}
+    @GetMapping("/session/{sessionId}")
+    public ResponseEntity<List<OrderResponse>> getOrdersBySession(
+            @PathVariable Long sessionId) {
+        return ResponseEntity.ok(orderService.getOrdersBySession(sessionId));
+    }
+    
     // POST /api/orders/table/{tableId}/mark-paid
     @PostMapping("/table/{tableId}/mark-paid")
     public ResponseEntity<Void> markTableAsPaid(

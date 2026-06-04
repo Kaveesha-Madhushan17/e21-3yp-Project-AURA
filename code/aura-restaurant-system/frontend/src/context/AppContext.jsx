@@ -15,6 +15,8 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import { DEFAULT_MENU_IMAGE_FILENAME, isKnownMenuImage } from '../utils/menuImages';
 import authAPI from '../api/authAPI';
 import menuAPI from '../api/menuAPI';
+import walkInAPI from '../api/walkInAPI';
+
 
 const MENU_STORAGE_KEY = 'aura_menu_items';
 const MENU_STORAGE_VER = 2;
@@ -287,6 +289,24 @@ export function AppProvider({ children }) {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
+  // ── Hidden order IDs state ──
+const [hiddenOrderIds, setHiddenOrderIds] = useState(() => {
+  try {
+    const stored = localStorage.getItem('aura_hidden_order_ids');
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+});
+
+useEffect(() => {
+  try {
+    localStorage.setItem('aura_hidden_order_ids', JSON.stringify(hiddenOrderIds));
+  } catch {}
+}, [hiddenOrderIds]);
+
+
+
   // ── Theme state ── ('dark' | 'light')  persisted to localStorage
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('aura_theme') || 'dark'; }
@@ -340,38 +360,45 @@ const login = useCallback(async (username, password) => {
   }, []);
 
   // ── New Customer Session ─────────────────────────────────────────────────
-// Stores sets of order IDs to hide per table — avoids clock skew issues
-const [hiddenOrderIds, setHiddenOrderIds] = useState(() => {
-  try {
-    const stored = localStorage.getItem('aura_hidden_order_ids');
-    return stored ? JSON.parse(stored) : {};
-  } catch {
-    return {};
-  }
-});
 
-useEffect(() => {
-  try {
-    localStorage.setItem('aura_hidden_order_ids', JSON.stringify(hiddenOrderIds));
-  } catch {}
-}, [hiddenOrderIds]);
-
-// Pass the current visible order IDs to hide them for the next customer
-const startNewCustomer = useCallback((tableNumber, currentOrderIds = []) => {
+// Replace your existing startNewCustomer with this:
+const startNewCustomerSession = useCallback(async (tableNumber, currentOrderIds = []) => {
   if (!tableNumber) return false;
-  setHiddenOrderIds((prev) => {
-    const existing = Array.isArray(prev[tableNumber]) ? prev[tableNumber] : [];
-    return {
-      ...prev,
-      [tableNumber]: [...new Set([...existing, ...currentOrderIds])],
-    };
-  });
-  return true;
+
+  try {
+    // 1. Create a new walk-in session in the backend
+    const tableId = parseInt(tableNumber.replace(/\D/g, ''), 10) || 1;
+    const { sessionId } = await walkInAPI.createSession(tableId);
+
+    // 2. Store the new sessionId in the current session
+    setSession(prev => {
+      const updated = { ...prev, walkInSessionId: sessionId };
+      localStorage.setItem('authUser', JSON.stringify(updated));
+      return updated;
+    });
+
+    // 3. Hide current orders from the new customer's view
+    setHiddenOrderIds(prev => {
+      const existing = Array.isArray(prev[tableNumber]) ? prev[tableNumber] : [];
+      return {
+        ...prev,
+        [tableNumber]: [...new Set([...existing, ...currentOrderIds])],
+      };
+    });
+
+    return true;
+  } catch (err) {
+    console.error('[AURA] Failed to create new customer session:', err);
+    return false;
+  }
 }, []);
+
+
 
 const getHiddenOrderIds = useCallback((tableNumber) => {
   return new Set(hiddenOrderIds[tableNumber] || []);
 }, [hiddenOrderIds]);
+
 
   // ── Logout ────────────────────────────────────────────────────────────────
   const logout = useCallback(async () => {
@@ -439,8 +466,8 @@ const getHiddenOrderIds = useCallback((tableNumber) => {
     login, logout, verifyCredentials,
     theme, toggleTheme,
     menuItems, addMenuItem, deleteMenuItem, refreshMenu,
-    // New Customer session management
-    startNewCustomer, getHiddenOrderIds,
+    startNewCustomerSession,
+    getHiddenOrderIds,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

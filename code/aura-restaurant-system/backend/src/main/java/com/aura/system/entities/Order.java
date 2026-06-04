@@ -32,4 +32,7 @@ public class Order {
 
     @Column(name = "total_amount")
     private Float totalAmount;
+
+    @Column(name = "walk_in_session_id")
+    private Long walkInSessionId;
 }

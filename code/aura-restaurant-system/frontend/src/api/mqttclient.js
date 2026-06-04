@@ -10,6 +10,7 @@ class KitchenMqttService {
       onOrderStatusUpdate: [],
       onMenuUpdate: [],
       onDashboardStats: [],
+      onWaiterCall: [],
       onRobotFleetUpdate: [],
       onError: [],
     };
@@ -54,6 +55,8 @@ class KitchenMqttService {
           this.listeners.onDashboardStats.forEach(cb => cb(data));
         } else if (topic === 'aura/admin/robots') {
           this.listeners.onRobotFleetUpdate.forEach(cb => cb(data));
+        } else if (topic.includes('/call-waiter')) {
+          this.listeners.onWaiterCall.forEach(cb => cb(data));
         }
       } catch (e) {
         console.error('Failed to parse MQTT message:', e);
@@ -74,6 +77,8 @@ class KitchenMqttService {
       console.warn('⚠️ MQTT offline');
       this.connected = false;
     });
+
+    this.client.subscribe('aura/table/+/call-waiter');
   }
 
   onNewOrder(callback) {
@@ -132,6 +137,22 @@ class KitchenMqttService {
 
   isConnected() {
     return this.connected;
+  }
+
+  // Waiter call publish method
+  publish(topic, payload) {
+    if (this.client && this.connected) {
+      this.client.publish(topic, JSON.stringify(payload));
+    }
+  }
+
+  // Waiter call receive listener
+  onWaiterCall(callback) {
+    this.listeners.onWaiterCall.push(callback);
+    return () => {
+      this.listeners.onWaiterCall =
+        this.listeners.onWaiterCall.filter(cb => cb !== callback);
+    };
   }
 }
 

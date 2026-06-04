@@ -10,8 +10,8 @@ import com.aura.system.services.OrderService;
 import com.aura.system.services.DashboardStatsService;
 import com.aura.system.services.RobotFleetService;
 import com.aura.system.mqtt.MqttPublisher;
-import com.aura.system.mqtt.MqttGateway; // පියවර 01: Gateway එක Import කිරීම
-import com.fasterxml.jackson.databind.ObjectMapper; // JSON සඳහා
+import com.aura.system.mqtt.MqttGateway;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -39,12 +39,8 @@ public class OrderServiceImpl implements OrderService {
     private final MenuItemRepository menuItemRepository;
     private final RestaurantTableRepository tableRepository;
     private final MqttPublisher mqttPublisher;
-    
-    // පියවර 01: MqttGateway සහ ObjectMapper Inject කිරීම (RequiredArgsConstructor නිසා final ලෙස යොදන්න)
-    private final MqttGateway mqttGateway; 
+    private final MqttGateway mqttGateway;
     private final ObjectMapper objectMapper;
-    
-    // Dashboard stats publishing
     private final DashboardStatsService dashboardStatsService;
     private final RobotFleetService robotFleetService;
 
@@ -61,6 +57,7 @@ public class OrderServiceImpl implements OrderService {
                 .status("PENDING")
                 .totalAmount(0.0f)
                 .orderTime(LocalDateTime.now())
+                .walkInSessionId(request.getWalkInSessionId()) // ✅ walkInSessionId save වෙනවා
                 .build();
 
         Order savedOrder = orderRepository.save(order);
@@ -89,7 +86,6 @@ public class OrderServiceImpl implements OrderService {
         savedOrder.setTotalAmount(total);
         orderRepository.save(savedOrder);
 
-        // Kitchen Update via MQTT
         try {
             String topic = "aura/kitchen/update-order";
             String payload = String.format(
@@ -98,8 +94,6 @@ public class OrderServiceImpl implements OrderService {
             );
             mqttPublisher.publish(topic, payload);
             log.info("Order placed & Kitchen notified | orderId={}", savedOrder.getOrderId());
-            
-            // Trigger dashboard stats update
             dashboardStatsService.publishDashboardStats();
         } catch (Exception e) {
             log.error("Failed to notify kitchen: {}", e.getMessage());
@@ -108,7 +102,7 @@ public class OrderServiceImpl implements OrderService {
         return buildResponse(savedOrder, savedItems);
     }
 
-    // ── Update Status (පියවර 02: Robot Notification එක් කළ කොටස) ──────────────
+    // ── Update Status ──────────────────────────────────────────────────────────
 
     @Override
     @Transactional
@@ -118,7 +112,7 @@ public class OrderServiceImpl implements OrderService {
         String oldStatus = order.getStatus();
         String newStatus = status.toUpperCase();
         order.setStatus(newStatus);
-        
+
         if ("DELIVERED".equals(newStatus)) {
             order.setDeliveredAt(LocalDateTime.now());
         }
@@ -128,7 +122,6 @@ public class OrderServiceImpl implements OrderService {
 
         List<OrderItem> items = orderItemRepository.findByOrderOrderId(orderId);
 
-        // 1. Kitchen Update (දැනට ඇති logic එක)
         try {
             String kitchenTopic = "aura/kitchen/update-order";
             String kitchenPayload = String.format(
@@ -136,30 +129,26 @@ public class OrderServiceImpl implements OrderService {
                 order.getOrderId(), order.getTable().getTableId(), order.getTotalAmount(), newStatus
             );
             mqttPublisher.publish(kitchenTopic, kitchenPayload);
-            
-            // Trigger dashboard stats update
             dashboardStatsService.publishDashboardStats();
         } catch (Exception e) {
             log.error("Kitchen MQTT fail: {}", e.getMessage());
         }
 
-        // 2. Robot Update (පියවර 02: Robot/Pi වෙත සජීවීව දැනුම් දීම)
         try {
             String robotTopic = "aura/robot/" + order.getTable().getTableId() + "/status";
-            
+
             Map<String, Object> payloadMap = new HashMap<>();
             payloadMap.put("orderId", order.getOrderId());
             payloadMap.put("tableId", order.getTable().getTableId());
             payloadMap.put("status", newStatus);
-            
+
             String robotPayload = objectMapper.writeValueAsString(payloadMap);
-            
-            // If order delivered, increment robot delivery count
+
             if ("DELIVERED".equals(newStatus)) {
-                robotFleetService.incrementRobotDeliveryCount(1); // TODO: Get actual robot ID from order
+                robotFleetService.incrementRobotDeliveryCount(1);
             }
             mqttGateway.sendToMqtt(robotPayload, robotTopic);
-            
+
             log.info("MQTT notification sent to Robot on topic: {}", robotTopic);
         } catch (Exception e) {
             log.error("Failed to send MQTT status update to robot: {}", e.getMessage());
@@ -168,7 +157,7 @@ public class OrderServiceImpl implements OrderService {
         return buildResponse(order, items);
     }
 
-    // ── අනෙකුත් Methods (වෙනසක් නැත) ──────────────────────────────────────────
+    // ── Other Methods ──────────────────────────────────────────────────────────
 
     @Override
     @Transactional(readOnly = true)
@@ -193,11 +182,21 @@ public class OrderServiceImpl implements OrderService {
                 .collect(Collectors.toList());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getOrdersBySession(Long sessionId) {
+    return orderRepository.findByWalkInSessionId(sessionId)
+            .stream()
+            .map(order -> buildResponse(order, orderItemRepository.findByOrderOrderId(order.getOrderId())))
+            .collect(Collectors.toList());
+    }
+
     private Order findOrThrow(Integer orderId) {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found: " + orderId));
     }
 
+    // ── CHANGED: walkInSessionId දැන් response එකේ include වෙනවා ──────────────
     private OrderResponse buildResponse(Order order, List<OrderItem> items) {
         List<OrderItemResponse> itemResponses = items.stream()
                 .map(item -> OrderItemResponse.builder()
@@ -218,6 +217,7 @@ public class OrderServiceImpl implements OrderService {
                 .totalAmount(order.getTotalAmount())
                 .orderTime(order.getOrderTime())
                 .deliveredAt(order.getDeliveredAt())
+                .walkInSessionId(order.getWalkInSessionId()) // ✅ ADDED - නව line එක
                 .items(itemResponses)
                 .build();
     }
@@ -244,7 +244,6 @@ public class OrderServiceImpl implements OrderService {
         unpaidOrders.forEach(order -> order.setStatus("PAID"));
         orderRepository.saveAll(unpaidOrders);
 
-        // Notify all clients via MQTT
         try {
             String topic = "aura/kitchen/update-order";
             String payload = String.format(
@@ -253,8 +252,6 @@ public class OrderServiceImpl implements OrderService {
             );
             mqttPublisher.publish(topic, payload);
             log.info("Table {} marked as paid | {} orders updated", tableId, unpaidOrders.size());
-
-            // Refresh dashboard stats (revenue increases when table pays)
             dashboardStatsService.publishDashboardStats();
         } catch (Exception e) {
             log.error("Failed to publish MQTT after marking table {} as paid: {}", tableId, e.getMessage());

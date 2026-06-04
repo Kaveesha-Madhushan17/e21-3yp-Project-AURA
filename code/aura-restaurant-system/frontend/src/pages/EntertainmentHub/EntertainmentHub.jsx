@@ -125,7 +125,7 @@ function MusicTab({ dark }) {
                     song.tag.includes("Celebration") ? (dark ? "bg-orange-500/20 text-orange-400"  : "bg-orange-100 text-orange-700")
                     : song.tag.includes("Sinhala")   ? (dark ? "bg-emerald-500/20 text-emerald-400": "bg-emerald-100 text-emerald-700")
                     : song.tag.includes("Tamil")     ? (dark ? "bg-blue-500/20 text-blue-400"      : "bg-blue-100 text-blue-700")
-                    :                                  (dark ? "bg-white/10 text-gray-300"          : "bg-gray-200 text-gray-600")
+                    :                                  (dark ? "bg-white/10 text-gray-300"         : "bg-gray-200 text-gray-600")
                   }`}>{song.tag}</span>
                 </div>
               </div>
