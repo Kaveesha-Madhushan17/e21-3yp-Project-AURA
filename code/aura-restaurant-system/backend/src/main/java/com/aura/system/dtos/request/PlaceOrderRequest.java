@@ -12,6 +12,8 @@ public class PlaceOrderRequest {
     @NotNull(message = "Table ID is required")
     private Integer tableId;
 
+    private Long walkInSessionId;
+
     @NotEmpty(message = "Order must have at least one item")
     @Valid
     private List<OrderItemRequest> items;

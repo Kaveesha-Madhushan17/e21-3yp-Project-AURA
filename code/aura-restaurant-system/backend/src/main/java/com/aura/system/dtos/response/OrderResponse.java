@@ -15,4 +15,5 @@ public class OrderResponse {
     private LocalDateTime     orderTime;
     private LocalDateTime     deliveredAt;
     private List<OrderItemResponse> items;
+    private Long walkInSessionId;
 }

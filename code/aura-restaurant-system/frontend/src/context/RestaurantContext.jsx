@@ -314,16 +314,17 @@ export function RestaurantProvider({ children }) {
   const activeOrders = state.orderHistory.filter((o) => o.status !== ORDER_STATUS.DELIVERED);
 
   // ── Mutators ──────────────────────────────────────────────────────────────
-
-  const placeOrder = useCallback(async (tableNumber, items, isAddon = false) => {
-    const tableId = Number(String(tableNumber).replace(/\D/g, '')) || 1;
-    const payload = {
-      tableId: tableId,
-      items: items.map((item) => ({
-        menuItemId: item.id,
-        quantity: item.quantity,
-      })),
-    };
+  
+const placeOrder = useCallback(async (tableNumber, items, walkInSessionId = null) => {
+  const tableId = Number(String(tableNumber).replace(/\D/g, '')) || 1;
+  const payload = {
+    tableId: tableId,
+    walkInSessionId: walkInSessionId,   // ← ADD THIS
+    items: items.map((item) => ({
+      menuItemId: item.id,
+      quantity: item.quantity,
+    })),
+  };
 
     try {
       const response = await orderAPI.placeOrder(payload);

@@ -3,7 +3,7 @@ import {
   ChefHat, Flame, Leaf, IceCreamCone, Coffee, UtensilsCrossed,
   Plus, Minus, LogOut, Sun, Moon, Lock, X,
   ShoppingCart, CreditCard, Trash2, CheckCircle2,
-  Clock, Bike, PartyPopper,
+  Clock, Bike, PartyPopper,Settings,
 } from 'lucide-react';
 import { useAppContext }             from '../../context/AppContext';
 import { useRestaurant, ORDER_STATUS } from '../../context/RestaurantContext';
@@ -11,6 +11,7 @@ import { getMenuImageSrc }           from '../../utils/menuImages';
 import { orderMqtt }                 from '../../api/mqttclient';
 import { useNavigate }               from 'react-router-dom';
 import OrderHistoryModal             from '../../components/OrderHistoryModal/OrderHistoryModal';
+import waiterAPI                     from '../../api/waiterAPI';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CATS = [
@@ -24,6 +25,7 @@ const CATS = [
 ];
 
 const CATEGORY_ORDER = ['Appetizers', 'Rice', 'Koththu', 'Noodle', 'desserts', 'Other'];
+
 
 const STATUS_CFG = {
   PENDING:   { label: 'Sent — Awaiting Kitchen',  icon: Clock,       color: 'text-sky-400',    bg: 'bg-sky-500/10',    ring: 'ring-sky-500/25'    },
@@ -39,8 +41,12 @@ export default function RobotUI() {
     session, logout, verifyCredentials,
     menuItems, theme, toggleTheme, refreshMenu,
     getHiddenOrderIds,
+    startNewCustomerSession,
   } = useAppContext();
-
+  
+  const [waiterCalled, setWaiterCalled] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [modalMode, setModalMode] = useState('logout');
   const { placeOrder, getUnpaidOrders } = useRestaurant();
   const navigate = useNavigate();
 
@@ -149,8 +155,9 @@ export default function RobotUI() {
     setOrderLoading(true);
     try {
       const tableNumber = session?.tableNumber || 'T1';
+      const walkInSessionId = session?.walkInSessionId || null;
       for (const item of cart) {
-        await placeOrder(tableNumber, [item]);
+        await placeOrder(tableNumber, [item], walkInSessionId);
       }
       setCart([]);
       setShowCart(false);
@@ -164,14 +171,29 @@ export default function RobotUI() {
   };
 
   // ── Staff logout ──
-  const confirmLogout = async () => {
-    if (!lUser || !lPass) { setLErr('Enter username and password.'); return; }
-    setLLoading(true);
-    await new Promise(r => setTimeout(r, 500));
-    const ok = verifyCredentials(lUser, lPass);
-    setLLoading(false);
-    if (ok) logout(); else setLErr('Incorrect credentials.');
-  };
+const confirmStaffAction = async () => {
+  if (!lUser || !lPass) { setLErr('Enter username and password.'); return; }
+  setLLoading(true);
+  await new Promise(r => setTimeout(r, 500));
+  const ok = verifyCredentials(lUser, lPass);
+  setLLoading(false);
+
+  if (!ok) { setLErr('Incorrect credentials.'); return; }
+
+  if (modalMode === 'logout') {
+    logout();
+  } else {
+    // New customer — get current unpaid order IDs to hide them
+    const currentOrderIds = allUnpaidOrders.map(o => o.id);
+    const success = await startNewCustomerSession(session?.tableNumber, currentOrderIds);
+    if (success) {
+      setShowLogout(false);
+      setCart([]);
+    } else {
+      setLErr('Failed to create new session. Try again.');
+    }
+  }
+};
 
   // ── Theme colour map ──
   const tc = {
@@ -226,6 +248,169 @@ export default function RobotUI() {
         {/* Right action buttons */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
 
+          {/* 🔔 Ask Waiter Button */}
+          <button
+            onClick={async () => {
+              try {
+                await waiterAPI.callWaiter(
+                  numericTableId,
+                  table,
+                  'Customer needs assistance'
+                );
+                setWaiterCalled(true);
+                setTimeout(() => setWaiterCalled(false), 3000);
+              } catch (err) {
+                console.error('Waiter call failed:', err);
+                // Error වුණත් toast show කරන්න
+                setWaiterCalled(true);
+                setTimeout(() => setWaiterCalled(false), 3000);
+              }
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 
+              rounded-[10px] text-[11px] sm:text-xs font-semibold transition-all 
+              duration-200 hover:-translate-y-[1px] active:translate-y-0 hover:shadow-lg ${
+              D
+                ? 'bg-yellow-500/15 text-yellow-300 border border-yellow-500/30 hover:bg-yellow-500/25'
+                : 'bg-yellow-50 text-yellow-700 border border-yellow-300 hover:bg-yellow-100'
+            }`}>
+            <span className="text-sm sm:text-base">🔔</span>
+            <span>Ask Waiter</span>
+          </button>
+
+          {/* 📋 Order status */}
+          <button
+            onClick={() => setShowHistory(true)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-[10px] text-[11px] sm:text-xs font-semibold transition-all duration-200 hover:-translate-y-[1px] active:translate-y-0 hover:shadow-lg ${
+              D
+                ? 'bg-white/12 text-white border border-white/25 hover:bg-white/22 hover:border-white/45 shadow-black/20'
+                : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200 hover:border-gray-400 shadow-gray-200'
+            }`}>
+            <span className="text-sm sm:text-base">📋</span>
+            <span>Your Order Status</span>
+          </button>
+
+
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════
+          MAIN CONTENT AREA (Menu + Right Sidebar)
+      ══════════════════════════════════════════════════ */}
+      <div className="flex-1 overflow-hidden flex flex-row">
+
+        {/* ── LEFT: MENU GRID + PAGINATION ── */}
+        <div className="flex-1 overflow-hidden flex flex-col px-3 sm:px-5 pt-3 sm:pt-5 pb-2 sm:pb-3 gap-2 sm:gap-3 relative">
+
+          {/* Grid */}
+          <div className="flex-1 overflow-hidden">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4 h-full content-start">
+              {items.map(item => {
+                const cartQty = cart.find(c => c.id === item.id)?.quantity || 0;
+                return (
+                  <div key={item.id} className={`border rounded-xl sm:rounded-2xl overflow-hidden transition-all duration-300 group flex flex-col justify-between ${tc.card}`}>
+
+                    {/* Image */}
+                    <div className={`h-24 sm:h-32 xl:h-40 flex-shrink-0 bg-gradient-to-br ${tc.hero} relative overflow-hidden`}>
+                      <img src={getMenuImageSrc(item.imageFilename)} alt={item.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
+                      <div className={`absolute inset-0 ${D ? 'bg-black/25' : 'bg-black/10'}`}/>
+                      {cartQty > 0 && (
+                        <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-orange-500 text-white text-xs font-bold flex items-center justify-center shadow-lg">
+                          {cartQty}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="p-2 sm:p-4 flex flex-col flex-1 justify-between">
+                      <div>
+                        <h3 className={`font-semibold text-xs sm:text-sm leading-tight mb-1 truncate ${tc.tt}`}>{item.name}</h3>
+                        <p className={`text-[10px] sm:text-xs leading-3 sm:leading-4 mb-1 sm:mb-2 line-clamp-1 sm:line-clamp-2 ${tc.st}`}>
+                          {item.description || 'Chef crafted signature dish.'}
+                        </p>
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-2 sm:mb-3 mt-1">
+                          <span className="text-sm sm:text-lg font-bold text-orange-500">${item.price.toFixed(2)}</span>
+                          <span className={`text-[9px] sm:text-xs ${tc.mc}`}>⏱ {item.time}</span>
+                        </div>
+
+                        {cartQty === 0 ? (
+                          <button onClick={() => addToCart(item)}
+                            className="w-full h-8 sm:h-10 rounded-lg sm:rounded-xl font-semibold text-[11px] sm:text-sm transition-all active:scale-95 flex items-center justify-center gap-1 sm:gap-2 bg-orange-500 hover:bg-orange-400 text-white shadow-md shadow-orange-500/20">
+                            <Plus size={14}/>Add to Order
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => decreaseQty(item.id)}
+                              className={`flex-1 h-8 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center transition-all active:scale-95 ${D ? 'bg-white/10 hover:bg-red-500/20 text-gray-300 hover:text-red-400' : 'bg-gray-100 hover:bg-red-100 text-gray-500 hover:text-red-500'}`}>
+                              <Minus size={14}/>
+                            </button>
+                            <span className={`w-7 text-center text-sm font-bold ${tc.tt}`}>{cartQty}</span>
+                            <button onClick={() => increaseQty(item.id)}
+                              className="flex-1 h-8 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center transition-all active:scale-95 bg-orange-500/20 hover:bg-orange-500 text-orange-500 hover:text-white">
+                              <Plus size={14}/>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Pagination bar */}
+          {totalPages > 1 && (
+            <div className={`flex-shrink-0 flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl border ${tc.pgBox}`}>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-semibold transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${tc.pgBtn}`}>
+                ← Prev
+              </button>
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                  <button key={page} onClick={() => setCurrentPage(page)}
+                    className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-bold transition-all active:scale-95 ${
+                      currentPage === page
+                        ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
+                        : D ? 'bg-white/5 text-gray-400 hover:bg-white/15 hover:text-white border border-white/10'
+                            : 'bg-white text-gray-500 hover:bg-orange-50 hover:text-orange-500 border border-gray-200'
+                    }`}>
+                    {page}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-semibold transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${tc.pgBtn}`}>
+                Next →
+              </button>
+            </div>
+          )}
+
+          {/* 🎉 Floating entertainment banner
+          {(
+            <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-50 w-max">
+              <button
+                onClick={() => navigate('/entertain')}
+                className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-4 px-8 rounded-full shadow-[0_10px_40px_rgba(124,58,237,0.5)] font-bold text-base flex items-center justify-center gap-3 hover:scale-105 active:scale-95 transition-all animate-bounce ring-4 ring-purple-500/30 cursor-pointer">
+                🎧 Listen to music while playing games! ✨
+              </button>
+            </div>
+          )} */}
+
+        </div>
+        {/* ══════════════════════════════════════════════════
+            RIGHT SIDEBAR
+        ══════════════════════════════════════════════════ */}
+        <div className={`flex-shrink-0 w-16 sm:w-20 flex flex-col items-center py-4 gap-3 border-l ${tc.bar}`}>
+          {/* Empty — features coming soon */}
+
           {/* 🛒 Cart */}
           <button
             onClick={() => setShowCart(true)}
@@ -245,16 +430,19 @@ export default function RobotUI() {
             <CreditCard size={15} className="sm:w-[17px] sm:h-[17px]"/>
           </button>
 
-          {/* 📋 Order status */}
+          {/* 🎵 Music button */}
           <button
-            onClick={() => setShowHistory(true)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-[10px] text-[11px] sm:text-xs font-semibold transition-all duration-200 hover:-translate-y-[1px] active:translate-y-0 hover:shadow-lg ${
-              D
-                ? 'bg-white/12 text-white border border-white/25 hover:bg-white/22 hover:border-white/45 shadow-black/20'
-                : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200 hover:border-gray-400 shadow-gray-200'
-            }`}>
-            <span className="text-sm sm:text-base">📋</span>
-            <span>Your Order Status</span>
+            onClick={() => navigate('/entertain/music')}             className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all active:scale-90 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 hover:border-purple-500/40`}>
+            <span className="text-base">🎵</span>
+            <span className="text-[9px] font-medium text-purple-400">Music</span>
+          </button>
+
+          {/* 🎮 Games button */}
+          <button
+            onClick={() => navigate('/entertain/games')}
+            className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all active:scale-90 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 hover:border-indigo-500/40`}>
+            <span className="text-base">🎮</span>
+            <span className="text-[9px] font-medium text-indigo-400">Games</span>
           </button>
 
           {/* Theme toggle */}
@@ -263,129 +451,90 @@ export default function RobotUI() {
             {D ? <Sun size={15}/> : <Moon size={15}/>}
           </button>
 
-          {/* Staff logout */}
-          <button onClick={() => { setLUser(''); setLPass(''); setLErr(''); setShowLogout(true); }}
-            className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-medium transition-all active:scale-95 ${tc.btn2}`}>
-            <LogOut size={12}/><span className="hidden sm:inline">Staff Logout</span>
-          </button>
 
-        </div>
-      </div>
+          {/* ⚙️ Settings Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSettings(prev => !prev)}
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center transition-all active:scale-90 ${
+                showSettings
+                  ? D ? 'bg-white/15 text-white' : 'bg-gray-200 text-gray-900'
+                  : D ? 'bg-white/5 hover:bg-white/15 text-gray-400 hover:text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-500'
+              }`}>
+              <Settings size={15}/>
+            </button>
 
-      {/* ══════════════════════════════════════════════════
-          MENU GRID + PAGINATION
-      ══════════════════════════════════════════════════ */}
-      <div className="flex-1 overflow-hidden flex flex-col px-3 sm:px-5 pt-3 sm:pt-5 pb-2 sm:pb-3 gap-2 sm:gap-3 relative">
+            {/* Dropdown */}
+            {showSettings && (
+              <>
+                {/* Backdrop - click outside වලදී close වෙනවා */}
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowSettings(false)}
+                />
 
-        {/* Grid */}
-        <div className="flex-1 overflow-hidden">
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4 h-full content-start">
-            {items.map(item => {
-              const cartQty = cart.find(c => c.id === item.id)?.quantity || 0;
-              return (
-                <div key={item.id} className={`border rounded-xl sm:rounded-2xl overflow-hidden transition-all duration-300 group flex flex-col justify-between ${tc.card}`}>
+                <div className={`absolute right-0 top-11 z-50 w-52 rounded-2xl border shadow-2xl overflow-hidden ${tc.modal}`}>
 
-                  {/* Image */}
-                  <div className={`h-24 sm:h-32 xl:h-40 flex-shrink-0 bg-gradient-to-br ${tc.hero} relative overflow-hidden`}>
-                    <img src={getMenuImageSrc(item.imageFilename)} alt={item.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
-                    <div className={`absolute inset-0 ${D ? 'bg-black/25' : 'bg-black/10'}`}/>
-                    {cartQty > 0 && (
-                      <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-orange-500 text-white text-xs font-bold flex items-center justify-center shadow-lg">
-                        {cartQty}
-                      </div>
-                    )}
+                  {/* Header */}
+                  <div className={`px-4 py-3 border-b ${D ? 'border-white/10' : 'border-gray-100'}`}>
+                    <p className={`text-xs font-semibold ${tc.st}`}>Staff Controls</p>
                   </div>
 
-                  {/* Info */}
-                  <div className="p-2 sm:p-4 flex flex-col flex-1 justify-between">
-                    <div>
-                      <h3 className={`font-semibold text-xs sm:text-sm leading-tight mb-1 truncate ${tc.tt}`}>{item.name}</h3>
-                      <p className={`text-[10px] sm:text-xs leading-3 sm:leading-4 mb-1 sm:mb-2 line-clamp-1 sm:line-clamp-2 ${tc.st}`}>
-                        {item.description || 'Chef crafted signature dish.'}
-                      </p>
+                  {/* New Customer option */}
+                  <button
+                    onClick={() => {
+                      setShowSettings(false);
+                      setLUser(''); setLPass(''); setLErr('');
+                      setModalMode('newCustomer');
+                      setShowLogout(true);
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all hover:bg-teal-500/10 text-teal-400 hover:text-teal-300`}>
+                    <div className="w-7 h-7 rounded-lg bg-teal-500/15 flex items-center justify-center flex-shrink-0">
+                      <Plus size={14} className="text-teal-400"/>
                     </div>
-                    <div>
-                      <div className="flex items-center justify-between mb-2 sm:mb-3 mt-1">
-                        <span className="text-sm sm:text-lg font-bold text-orange-500">${item.price.toFixed(2)}</span>
-                        <span className={`text-[9px] sm:text-xs ${tc.mc}`}>⏱ {item.time}</span>
-                      </div>
+                    <div className="text-left">
+                      <p className="text-sm font-semibold">New Customer</p>
+                      <p className={`text-[10px] ${tc.st}`}>Start fresh session</p>
+                    </div>
+                  </button>
 
-                      {cartQty === 0 ? (
-                        <button onClick={() => addToCart(item)}
-                          className="w-full h-8 sm:h-10 rounded-lg sm:rounded-xl font-semibold text-[11px] sm:text-sm transition-all active:scale-95 flex items-center justify-center gap-1 sm:gap-2 bg-orange-500 hover:bg-orange-400 text-white shadow-md shadow-orange-500/20">
-                          <Plus size={14}/>Add to Order
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => decreaseQty(item.id)}
-                            className={`flex-1 h-8 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center transition-all active:scale-95 ${D ? 'bg-white/10 hover:bg-red-500/20 text-gray-300 hover:text-red-400' : 'bg-gray-100 hover:bg-red-100 text-gray-500 hover:text-red-500'}`}>
-                            <Minus size={14}/>
-                          </button>
-                          <span className={`w-7 text-center text-sm font-bold ${tc.tt}`}>{cartQty}</span>
-                          <button onClick={() => increaseQty(item.id)}
-                            className="flex-1 h-8 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center transition-all active:scale-95 bg-orange-500/20 hover:bg-orange-500 text-orange-500 hover:text-white">
-                            <Plus size={14}/>
-                          </button>
-                        </div>
-                      )}
+                  {/* Divider */}
+                  <div className={`mx-4 border-t ${D ? 'border-white/5' : 'border-gray-100'}`}/>
+
+                  {/* Staff Logout option */}
+                  <button
+                    onClick={() => {
+                      setShowSettings(false);
+                      setLUser(''); setLPass(''); setLErr('');
+                      setModalMode('logout');
+                      setShowLogout(true);
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all hover:bg-red-500/10 text-red-400 hover:text-red-300`}>
+                    <div className="w-7 h-7 rounded-lg bg-red-500/15 flex items-center justify-center flex-shrink-0">
+                      <LogOut size={14} className="text-red-400"/>
                     </div>
-                  </div>
+                    <div className="text-left">
+                      <p className="text-sm font-semibold">Staff Logout</p>
+                      <p className={`text-[10px] ${tc.st}`}>Verify & logout</p>
+                    </div>
+                  </button>
 
                 </div>
-              );
-            })}
+              </>
+            )}
           </div>
+
+
         </div>
-
-        {/* Pagination bar */}
-        {totalPages > 1 && (
-          <div className={`flex-shrink-0 flex items-center justify-between px-2 sm:px-3 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl border ${tc.pgBox}`}>
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-semibold transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${tc.pgBtn}`}>
-              ← Prev
-            </button>
-            <div className="flex items-center gap-1 sm:gap-1.5">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                <button key={page} onClick={() => setCurrentPage(page)}
-                  className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-bold transition-all active:scale-95 ${
-                    currentPage === page
-                      ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
-                      : D ? 'bg-white/5 text-gray-400 hover:bg-white/15 hover:text-white border border-white/10'
-                           : 'bg-white text-gray-500 hover:bg-orange-50 hover:text-orange-500 border border-gray-200'
-                  }`}>
-                  {page}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-sm font-semibold transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${tc.pgBtn}`}>
-              Next →
-            </button>
-          </div>
-        )}
-
-        {/* 🎉 Floating entertainment banner */}
-        {confirmed.length > 0 && !delivered && (
-          <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-50 w-max">
-            <button
-              onClick={() => navigate('/entertain')}
-              className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-4 px-8 rounded-full shadow-[0_10px_40px_rgba(124,58,237,0.5)] font-bold text-base flex items-center justify-center gap-3 hover:scale-105 active:scale-95 transition-all animate-bounce ring-4 ring-purple-500/30 cursor-pointer">
-              🎧 Listen to music while playing games! ✨
-            </button>
-          </div>
-        )}
 
       </div>
 
       {/* ── Order History Modal ──────────────────────────────────────────────── */}
       {showHistory && (
+        console.log("DEBUG sessionId:", session?.walkInSessionId, "tableId:", numericTableId),
         <OrderHistoryModal
           tableId={numericTableId}
+          sessionId={session?.walkInSessionId}
           onClose={() => setShowHistory(false)}
         />
       )}
@@ -492,8 +641,8 @@ export default function RobotUI() {
       )}
 
       {/* ══════════════════════════════════════════════════
-          ORDER SUCCESS TOAST
-      ══════════════════════════════════════════════════ */}
+                  ORDER SUCCESS TOAST
+          ══════════════════════════════════════════════════ */}
       {orderPlaced && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl bg-emerald-500 text-white shadow-2xl shadow-emerald-500/40 animate-bounce">
           <CheckCircle2 size={22}/>
@@ -504,35 +653,121 @@ export default function RobotUI() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════
-          STAFF LOGOUT MODAL
-      ══════════════════════════════════════════════════ */}
-      {showLogout && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 sm:p-6">
-          <div className={`rounded-2xl sm:rounded-3xl p-6 sm:p-8 w-full max-w-sm border shadow-2xl ${tc.modal}`}>
-            <div className="flex items-center justify-between mb-5 sm:mb-6">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <Lock size={20} className="text-red-400"/>
-                <h3 className={`font-display text-base sm:text-lg font-bold ${tc.tt}`}>Staff Verification</h3>
-              </div>
-              <button onClick={() => setShowLogout(false)}
-                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center ${tc.btn2}`}>
-                <X size={14}/>
-              </button>
-            </div>
-            <input type="text" value={lUser} onChange={e => setLUser(e.target.value)} placeholder="Username"
-              className={`w-full rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 mb-3 sm:mb-4 border text-sm ${tc.inp}`}/>
-            <input type="password" value={lPass} onChange={e => setLPass(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && confirmLogout()} placeholder="Password"
-              className={`w-full rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 mb-3 sm:mb-4 border text-sm ${tc.inp}`}/>
-            {lErr && <div className="mb-3 sm:mb-4 text-xs text-red-400">⚠️ {lErr}</div>}
-            <button onClick={confirmLogout} disabled={lLoading}
-              className="w-full py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-red-500 text-white text-sm font-bold">
-              {lLoading ? 'Verifying...' : 'Logout'}
-            </button>
+      {/* 🔔 Waiter Called Toast */}
+      {waiterCalled && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl bg-yellow-500 text-white shadow-2xl shadow-yellow-500/40 animate-bounce">
+          <span className="text-xl">🔔</span>
+          <div>
+            <p className="font-bold text-sm">Waiter Called!</p>
+            <p className="text-xs text-yellow-100">Staff member will assist you shortly 😊</p>
           </div>
         </div>
       )}
+
+    {/* ══════════════════════════════════════════════════
+        STAFF LOGOUT / NEW CUSTOMER MODAL
+    ══════════════════════════════════════════════════ */}
+    {showLogout && (
+      <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className={`w-full max-w-sm rounded-2xl border shadow-2xl overflow-hidden ${tc.modal}`}>
+
+          {/* ── Colored Header Strip ── */}
+          <div className={`px-6 py-5 flex items-center justify-between ${
+            modalMode === 'logout'
+              ? 'bg-red-500/10 border-b border-red-500/20'
+              : 'bg-teal-500/10 border-b border-teal-500/20'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                modalMode === 'logout' ? 'bg-red-500/20' : 'bg-teal-500/20'
+              }`}>
+                {modalMode === 'logout'
+                  ? <LogOut size={18} className="text-red-400"/>
+                  : <Plus size={18} className="text-teal-400"/>
+                }
+              </div>
+              <div>
+                <h3 className={`font-bold text-base ${tc.tt}`}>
+                  {modalMode === 'logout' ? 'Staff Verification' : 'New Customer'}
+                </h3>
+                <p className={`text-xs ${tc.st}`}>
+                  {modalMode === 'logout' ? 'Enter credentials to logout' : 'Start a new customer session'}
+                </p>
+              </div>
+            </div>
+
+            {/* ✕ Close button */}
+            <button
+              onClick={() => { setShowLogout(false); setLErr(''); setLUser(''); setLPass(''); }}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all active:scale-90 ${tc.btn2}`}>
+              <X size={16}/>
+            </button>
+          </div>
+
+          {/* ── Form Body ── */}
+          <div className="px-6 py-5 space-y-3">
+            <div>
+              <label className={`block text-xs font-semibold mb-1.5 ${tc.st}`}>Username</label>
+              <input
+                type="text"
+                value={lUser}
+                onChange={e => setLUser(e.target.value)}
+                placeholder="Enter username"
+                className={`w-full rounded-xl px-4 py-3 border text-sm focus:outline-none focus:ring-2 ${
+                  modalMode === 'logout' ? 'focus:ring-red-500/30' : 'focus:ring-teal-500/30'
+                } ${tc.inp}`}
+              />
+            </div>
+            <div>
+              <label className={`block text-xs font-semibold mb-1.5 ${tc.st}`}>Password</label>
+              <input
+                type="password"
+                value={lPass}
+                onChange={e => setLPass(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && confirmStaffAction()}
+                placeholder="Enter password"
+                className={`w-full rounded-xl px-4 py-3 border text-sm focus:outline-none focus:ring-2 ${
+                  modalMode === 'logout' ? 'focus:ring-red-500/30' : 'focus:ring-teal-500/30'
+                } ${tc.inp}`}
+              />
+            </div>
+
+            {/* Error message */}
+            {lErr && (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+                <span className="text-red-400 text-sm">⚠️</span>
+                <span className="text-xs text-red-400">{lErr}</span>
+              </div>
+            )}
+          </div>
+
+          {/* ── Footer ── */}
+          <div className={`px-6 pb-6 flex gap-3`}>
+            <button
+              onClick={() => { setShowLogout(false); setLErr(''); setLUser(''); setLPass(''); }}
+              className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all active:scale-95 ${tc.btn2}`}>
+              Cancel
+            </button>
+            <button
+              onClick={confirmStaffAction}
+              disabled={lLoading}
+              className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2 ${
+                modalMode === 'logout'
+                  ? 'bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/25'
+                  : 'bg-teal-500 hover:bg-teal-400 text-white shadow-lg shadow-teal-500/25'
+              }`}>
+              {lLoading
+                ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Verifying...</>
+                : modalMode === 'logout'
+                  ? <><LogOut size={15}/> Logout</>
+                  : <><Plus size={15}/> Start Session</>
+              }
+            </button>
+          </div>
+
+        </div>
+      </div>
+    )}
 
     </div>
   );

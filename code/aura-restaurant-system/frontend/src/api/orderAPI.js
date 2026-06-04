@@ -97,6 +97,12 @@ export const orderAPI = {
     }
   },
 
+
+  getOrdersBySession: async (sessionId) => {
+    const response = await axiosInstance.get(`/orders/session/${sessionId}`);
+    return response.data;
+  },
+
   /**
    * Mark all unpaid orders for a table as PAID
    * @param {number} tableId - Table ID
