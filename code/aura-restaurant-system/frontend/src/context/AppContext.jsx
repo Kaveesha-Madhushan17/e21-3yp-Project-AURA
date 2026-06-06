@@ -433,7 +433,13 @@ const getHiddenOrderIds = useCallback((tableNumber) => {
       setMenuItems((prev) => [...prev, itemWithId]);
       return itemWithId;
     } catch (error) {
-      console.error('[AURA] Add menu item failed:', error.response?.data || error.message || error);
+      const errorDetails = {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        message: error.response?.data?.message || error.message,
+        data: error.response?.data,
+      };
+      console.error('[AURA] Add menu item failed:', JSON.stringify(errorDetails, null, 2));
       throw error;
     }
   }, []);
