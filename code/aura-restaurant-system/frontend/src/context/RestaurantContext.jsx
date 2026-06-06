@@ -64,6 +64,8 @@ import {
   createContext, useContext, useCallback, useReducer, useEffect, useState,
 } from 'react';
 import orderAPI from '../api/orderAPI';
+import { orderMqtt } from '../api/mqttclient';
+
 // ✅ FIXED: Removed STOMP WebSocket import to prevent connection failures
 // Using MQTT (via KitchenDisplay) instead for real-time updates
 // import { Client } from '@stomp/stompjs';
@@ -210,25 +212,41 @@ const RestaurantContext = createContext(null);
 export function RestaurantProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
   const [deliveredHistory, setDeliveredHistory] = useState([]);
+  const [waiterCalls, setWaiterCalls] = useState([]);
 
-  // ── [WEBSOCKET DISABLED - USE MQTT INSTEAD] ─────────────────────────────────
-  // ✅ FIXED: Removed WebSocket to avoid duplicate orders from dual channels
-  // MQTT (via KitchenDisplay + orderAPI.placeOrder) is the single source of truth
-  // 
-  // WebSocket was causing:
-  //   1. Silent failures when ws://localhost:8080/ws doesn't exist
-  //   2. Duplicate orders when both WebSocket and MQTT fire
-  //   3. Race conditions between multiple subscription sources
-  //
-  // New approach: REST API (placeOrder) + MQTT notifications (real-time) only
-  useEffect(() => {
-    // WebSocket connection disabled — will be re-enabled only if backend has proper /ws endpoint
-    // For now, rely on:
-    //   - REST API for order placement (synchronous)
-    //   - MQTT for real-time kitchen notifications (via orderMqtt in KitchenDisplay)
-    //   - refreshOrders() to sync state when needed
-    return () => {};
-  }, []);
+  const dismissWaiterCall = useCallback((callId) => {setWaiterCalls(prev => prev.map(c => c.id === callId ? { ...c, seen: true } : c));}, []);
+
+  const clearWaiterCalls = useCallback(() => {setWaiterCalls([]);}, []);
+
+
+// ── Single centralized MQTT listener for waiter calls ───────────────────────
+useEffect(() => {
+  orderMqtt.connect();
+
+  const unsubWaiter = orderMqtt.onWaiterCall((data) => {
+    console.log('🔔 [Context] Waiter call received:', data);
+    setWaiterCalls(prev => {
+      // Duplicate check — same table + same timestamp එකම second එකේ
+      const isDuplicate = prev.some(
+        c => c.tableNumber === data.tableNumber &&
+             Math.abs(new Date(c.timestamp) - new Date(data.timestamp)) < 2000
+      );
+      if (isDuplicate) {
+        console.log('⚠️ Duplicate waiter call ignored');
+        return prev;
+      }
+      return [
+        { ...data, id: Date.now(), seen: false },
+        ...prev.slice(0, 9),
+      ];
+    });
+  });
+
+  return () => {
+    unsubWaiter();
+  };
+}, []); // ← empty deps — once only, never re-registers
+
 
   // ── Load all active orders from backend on mount ──────────────────────────
   useEffect(() => {
@@ -445,6 +463,9 @@ const placeOrder = useCallback(async (tableNumber, items, walkInSessionId = null
     cancelOrder,
     refreshOrders,
     markTablePaid,
+    waiterCalls,
+    dismissWaiterCall,
+    clearWaiterCalls,
   };
 
   return (

@@ -45,6 +45,7 @@ export default function RobotUI() {
   } = useAppContext();
   
   const [waiterCalled, setWaiterCalled] = useState(false);
+  const [waiterError, setWaiterError] = useState(false); 
   const [showSettings, setShowSettings] = useState(false);
   const [modalMode, setModalMode] = useState('logout');
   const { placeOrder, getUnpaidOrders } = useRestaurant();
@@ -261,11 +262,12 @@ const confirmStaffAction = async () => {
                 setTimeout(() => setWaiterCalled(false), 3000);
               } catch (err) {
                 console.error('Waiter call failed:', err);
-                // Error වුණත් toast show කරන්න
-                setWaiterCalled(true);
-                setTimeout(() => setWaiterCalled(false), 3000);
+                setWaiterError(true);
+                setTimeout(() => setWaiterError(false), 3000);
               }
             }}
+
+
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 
               rounded-[10px] text-[11px] sm:text-xs font-semibold transition-all 
               duration-200 hover:-translate-y-[1px] active:translate-y-0 hover:shadow-lg ${
@@ -660,6 +662,17 @@ const confirmStaffAction = async () => {
           <div>
             <p className="font-bold text-sm">Waiter Called!</p>
             <p className="text-xs text-yellow-100">Staff member will assist you shortly 😊</p>
+          </div>
+        </div>
+      )}
+
+      {/* ❌ Waiter Call Failed Toast — ERROR */}
+      {waiterError && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl bg-red-500 text-white shadow-2xl shadow-red-500/40 animate-bounce">
+          <span className="text-xl">⚠️</span>
+          <div>
+            <p className="font-bold text-sm">Call Failed!</p>
+            <p className="text-xs text-red-100">Please try again or speak to staff directly.</p>
           </div>
         </div>
       )}
