@@ -105,6 +105,9 @@ export const menuAPI = {
       formData.append('file', file);
     }
 
+    console.log('📤 Sending menu item:', menuItem);
+    console.log('📄 Sending file:', file?.name, 'Size:', file?.size);
+
     const response = await axiosInstance.post('/menu', formData, {
       headers: {
         'Content-Type': undefined, // ← delete the global default
@@ -112,7 +115,13 @@ export const menuAPI = {
     });
     return response.data;
   } catch (error) {
-    console.error('Failed to create menu item:', error.response?.data || error.message);
+    const errorDetails = {
+      status: error.response?.status,
+      message: error.response?.statusText,
+      data: error.response?.data,
+      fullError: error.message,
+    };
+    console.error('❌ Failed to create menu item:', JSON.stringify(errorDetails, null, 2));
     throw error;
   }
 },
