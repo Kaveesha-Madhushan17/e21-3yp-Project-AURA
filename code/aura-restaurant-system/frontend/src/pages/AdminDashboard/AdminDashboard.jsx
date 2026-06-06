@@ -56,10 +56,12 @@ export default function AdminDashboard() {
     orderHistory,
     getConfirmedRevenue,
     getPendingOrderTotal,
-    refreshOrders
+    refreshOrders,
+    waiterCalls,
+    dismissWaiterCall,
+    clearWaiterCalls,
   } = useRestaurant();
   const isAdmin = session?.role === 'admin';
-  const [waiterCalls, setWaiterCalls] = useState([]);
 
   // ── Real-time Stats State ────────────────────────────────────────────────
   const [realtimeStats, setRealtimeStats] = useState({
@@ -103,13 +105,6 @@ export default function AdminDashboard() {
       }
     });
 
-    const unsubWaiter = orderMqtt.onWaiterCall((data) => {
-      setWaiterCalls(prev => [
-        { ...data, id: Date.now(), seen: false },
-        ...prev.slice(0, 9),
-      ]);
-    });
-
     const unsubNewOrder = orderMqtt.onNewOrder(async (data) => {
       console.log('🔔 New order received on admin dashboard:', data);
       await refreshOrders();
@@ -126,7 +121,6 @@ export default function AdminDashboard() {
       unsubRobots();
       unsubNewOrder();       // ← cleanup
       unsubStatusUpdate();   // ← cleanup
-      unsubWaiter();
     };
   }, [refreshMenu, refreshOrders]);  // ← add refreshOrders to deps
 
@@ -260,7 +254,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-[calc(100vh-4rem)]">
       <Sidebar />
@@ -292,7 +286,7 @@ export default function AdminDashboard() {
         {/* ── Tab Bar ── */}
         <div className="px-6 lg:px-8 flex gap-2 mb-6 border-b border-dark-700/50 pb-4">
           {[
-            { id: 'overview', label: 'Overview',    icon: LayoutDashboard  },
+            { id: 'overview', label: 'Overview',     icon: LayoutDashboard  },
             { id: 'menu',     label: 'Manage Menu', icon: UtensilsCrossed  },
           ].map(({ id, label, icon: Icon }) => (
             <button
@@ -313,128 +307,132 @@ export default function AdminDashboard() {
 
         {/* ══════════════════════ TAB: OVERVIEW ══════════════════════ */}
         {activeTab === 'overview' && (
-          <div className="flex-1 px-6 lg:px-8 space-y-8 pb-8">
+          <div className="flex-1 flex flex-row overflow-hidden">
 
-            {/* Stat cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {stats.map((stat) => {
-                const Icon = stat.icon;
-                return (
-                  <Card key={stat.label} hover={false} className="relative overflow-hidden">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-xs font-medium text-dark-400 uppercase tracking-wider">
-                          {stat.label}
-                        </p>
-                        <p className="text-3xl font-bold text-white mt-2 font-display">
-                          {stat.value}
-                        </p>
-                        <div className="flex items-center gap-1 mt-2">
-                          {stat.up
-                            ? <ArrowUpRight size={14} className="text-emerald-400" />
-                            : <ArrowDownRight size={14} className="text-red-400" />}
-                          <span className={`text-xs font-medium ${stat.up ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {stat.change}
-                          </span>
+            {/* ── LEFT: Main content ── */}
+            <div className="flex-1 px-6 lg:px-8 space-y-8 pb-8 overflow-y-auto">
+
+              {/* Stat cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {stats.map((stat) => {
+                  const Icon = stat.icon;
+                  return (
+                    <Card key={stat.label} hover={false} className="relative overflow-hidden">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-xs font-medium text-dark-400 uppercase tracking-wider">
+                            {stat.label}
+                          </p>
+                          <p className="text-3xl font-bold text-white mt-2 font-display">
+                            {stat.value}
+                          </p>
+                          <div className="flex items-center gap-1 mt-2">
+                            {stat.up
+                              ? <ArrowUpRight size={14} className="text-emerald-400" />
+                              : <ArrowDownRight size={14} className="text-red-400" />}
+                            <span className={`text-xs font-medium ${stat.up ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {stat.change}
+                            </span>
+                          </div>
+                        </div>
+                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${stat.color}
+                                        flex items-center justify-center shadow-lg`}>
+                          <Icon size={22} className="text-white" />
                         </div>
                       </div>
-                      <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${stat.color}
-                                      flex items-center justify-center shadow-lg`}>
-                        <Icon size={22} className="text-white" />
-                      </div>
+                      <div className={`absolute -bottom-6 -right-6 w-24 h-24 rounded-full
+                                      bg-gradient-to-br ${stat.color} opacity-5 blur-xl`} />
+                    </Card>
+                  );
+                })}
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Recent Orders */}
+                <div className="lg:col-span-2">
+                  <Card hover={false} className="p-0 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-dark-700/50 flex items-center justify-between">
+                      <h2 className="font-display text-lg font-bold text-white flex items-center gap-2">
+                        <ShoppingBag size={18} className="text-aura-400" />
+                        Recent Orders
+                      </h2>
+                      <span className="text-xs text-dark-500">{recentOrders.length} orders</span>
                     </div>
-                    <div className={`absolute -bottom-6 -right-6 w-24 h-24 rounded-full
-                                    bg-gradient-to-br ${stat.color} opacity-5 blur-xl`} />
+                    <div className="divide-y divide-dark-700/20">
+                      {recentOrders.length === 0 ? (
+                        <div className="px-6 py-10 text-center text-sm text-dark-500">
+                          No orders recorded yet.
+                        </div>
+                      ) : (
+                        recentOrders.map((order) => (
+                          <div key={order.id}
+                              className="px-6 py-4 flex items-center gap-4 hover:bg-dark-800/30 transition-colors">
+                            <div className="w-10 h-10 rounded-xl bg-dark-700 flex items-center justify-center text-sm font-bold text-aura-300">
+                              {order.tableNumber}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-white truncate">{order.id}</p>
+                              <p className="text-xs text-dark-500 truncate">
+                                {order.items.map((i) => `${i.quantity}× ${i.name}`).join(', ')}
+                              </p>
+                            </div>
+                            <StatusBadge status={order.status} />
+                            <span className="text-sm font-bold text-white ml-2">
+                              {formatPrice(order.total)}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </Card>
-                );
-              })}
-            </div>
+                </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Recent Orders */}
-              <div className="lg:col-span-2">
-                <Card hover={false} className="p-0 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-dark-700/50 flex items-center justify-between">
-                    <h2 className="font-display text-lg font-bold text-white flex items-center gap-2">
-                      <ShoppingBag size={18} className="text-aura-400" />
-                      Recent Orders
-                    </h2>
-                    <span className="text-xs text-dark-500">{recentOrders.length} orders</span>
-                  </div>
-                  <div className="divide-y divide-dark-700/20">
-                    {recentOrders.length === 0 ? (
-                      <div className="px-6 py-10 text-center text-sm text-dark-500">
-                        No orders recorded yet.
-                      </div>
-                    ) : (
-                      recentOrders.map((order) => (
-                        <div key={order.id}
-                             className="px-6 py-4 flex items-center gap-4 hover:bg-dark-800/30 transition-colors">
-                          <div className="w-10 h-10 rounded-xl bg-dark-700 flex items-center justify-center text-sm font-bold text-aura-300">
-                            {order.tableNumber}
+                {/* Robot Fleet */}
+                <div>
+                  <Card hover={false} className="p-0 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-dark-700/50">
+                      <h2 className="font-display text-lg font-bold text-white flex items-center gap-2">
+                        <Bot size={18} className="text-cyan-400" />
+                        Robot Fleet
+                      </h2>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      {robotFleet.map((robot) => (
+                        <div key={robot.id}
+                            className="glass-light rounded-xl p-4 hover:neon-border transition-all duration-300">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold text-white text-sm">{robot.id}</span>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full
+                              ${robot.status === 'delivering' ? 'bg-emerald-500/10 text-emerald-400'
+                              : robot.status === 'idle'      ? 'bg-aura-500/10 text-aura-300'
+                                                              : 'bg-amber-500/10 text-amber-400'}`}>
+                              {robot.status}
+                            </span>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-white truncate">{order.id}</p>
-                            <p className="text-xs text-dark-500 truncate">
-                              {order.items.map((i) => `${i.quantity}× ${i.name}`).join(', ')}
-                            </p>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 bg-dark-700 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-500
+                                ${robot.battery > 60 ? 'bg-emerald-400'
+                                : robot.battery > 30 ? 'bg-amber-400' : 'bg-red-400'}`}
+                                  style={{ width: `${robot.battery}%` }} />
+                            </div>
+                            <span className="text-xs text-dark-500 w-10 text-right">
+                              {robot.battery}%
+                            </span>
                           </div>
-                          <StatusBadge status={order.status} />
-                          <span className="text-sm font-bold text-white ml-2">
-                            {formatPrice(order.total)}
-                          </span>
+                          <p className="text-xs text-dark-500 mt-1.5">{robot.deliveries} deliveries today</p>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </Card>
+                      ))}
+                    </div>
+                  </Card>
+                </div>
               </div>
 
-              {/* Robot Fleet (Real-time updates via MQTT) */}
-              <div>
-                <Card hover={false} className="p-0 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-dark-700/50">
-                    <h2 className="font-display text-lg font-bold text-white flex items-center gap-2">
-                      <Bot size={18} className="text-cyan-400" />
-                      Robot Fleet
-                    </h2>
-                  </div>
-                  <div className="p-4 space-y-3">
-                    {robotFleet.map((robot) => (
-                      <div key={robot.id}
-                           className="glass-light rounded-xl p-4 hover:neon-border transition-all duration-300">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold text-white text-sm">{robot.id}</span>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full
-                            ${robot.status === 'delivering' ? 'bg-emerald-500/10 text-emerald-400'
-                             : robot.status === 'idle'      ? 'bg-aura-500/10 text-aura-300'
-                                                            : 'bg-amber-500/10 text-amber-400'}`}>
-                            {robot.status}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-dark-700 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full transition-all duration-500
-                              ${robot.battery > 60 ? 'bg-emerald-400'
-                               : robot.battery > 30 ? 'bg-amber-400' : 'bg-red-400'}`}
-                                 style={{ width: `${robot.battery}%` }} />
-                          </div>
-                          <span className="text-xs text-dark-500 w-10 text-right">
-                            {robot.battery}%
-                          </span>
-                        </div>
-                        <p className="text-xs text-dark-500 mt-1.5">{robot.deliveries} deliveries today</p>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              </div>
-            </div>
+            </div>{/* ── end LEFT ── */}
 
-
-            {/* ── Right Sidebar: Waiter Calls ── */}
+            {/* ── RIGHT SIDEBAR: Waiter Calls ── */}
             <div className="w-72 flex-shrink-0 border-l border-white/5 flex flex-col bg-[#0d0d0d]">
-              
+
               {/* Sidebar Header */}
               <div className="px-4 py-4 border-b border-white/5">
                 <div className="flex items-center justify-between">
@@ -481,11 +479,8 @@ export default function AdminDashboard() {
                             </p>
                           </div>
                         </div>
-                        {/* Mark as seen */}
                         <button
-                          onClick={() => setWaiterCalls(prev =>
-                            prev.map(c => c.id === call.id ? { ...c, seen: true } : c)
-                          )}
+                          onClick={() => dismissWaiterCall(call.id)}
                           className="w-6 h-6 rounded-md bg-white/5 hover:bg-green-500/20 text-gray-600 hover:text-green-400 transition-all flex items-center justify-center flex-shrink-0 text-xs"
                         >
                           ✓
@@ -496,7 +491,7 @@ export default function AdminDashboard() {
                 )}
               </div>
 
-              {/* Clear all button */}
+              {/* Clear all */}
               {waiterCalls.length > 0 && (
                 <div className="p-3 border-t border-white/5">
                   <button
@@ -508,10 +503,11 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-            </div>
+            </div>{/* ── end RIGHT SIDEBAR ── */}
+
           </div>
-        )};
-    
+        )} {/* ── end overview tab ── */}
+        
 
         {/* ══════════════════════ TAB: MANAGE MENU ══════════════════════ */}
         {activeTab === 'menu' && (
@@ -534,9 +530,6 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                {/* [BACKEND INTEGRATION: TODO] - POST /api/menu
-                    On submit, call axiosInstance.post('/menu', { name, description, price, category, prepTime, imageUrl, imagePublicId }).
-                    imageUrl/imagePublicId should come from media upload API below. */}
                 <form onSubmit={handleAddItem} className="space-y-4">
 
                   {/* Item name */}
@@ -636,7 +629,7 @@ export default function AdminDashboard() {
                     />
                   </div>
 
-                  {/* Image picker - Two options: Predefined or Upload */}
+                  {/* Image picker */}
                   <div>
                     <label className="block text-sm font-medium text-dark-300 mb-1.5">
                       Image <span className="text-red-400">*</span>
@@ -803,8 +796,6 @@ export default function AdminDashboard() {
                           <span className="text-base font-bold text-aura-400 flex-shrink-0">
                             ${item.price.toFixed(2)}
                           </span>
-                          {/* Delete */}
-                          {/* [BACKEND INTEGRATION: TODO] - DELETE /api/menu/{item.id} */}
                           <button
                             id={`delete-item-${item.id}`}
                             disabled={!isAdmin}

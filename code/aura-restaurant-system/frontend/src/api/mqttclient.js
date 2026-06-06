@@ -18,11 +18,16 @@ class KitchenMqttService {
 
   connect() {
     if (this.connected) return;
+    
+    const brokerUrl = import.meta.env.VITE_MQTT_URL || 'ws://localhost:9001';
+
 
     // WebSocket port 9001 — not TCP 1883
-    this.client = mqtt.connect('ws://10.30.3.193:9001', {
+    this.client = mqtt.connect(brokerUrl, {
       reconnectPeriod: 5000,
       connectTimeout: 10000,
+      clean: true,
+      clientId: `aura_web_${Math.random().toString(16).slice(2, 8)}`,
     });
 
     this.client.on('connect', () => {

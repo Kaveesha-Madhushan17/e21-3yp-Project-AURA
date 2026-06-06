@@ -63,10 +63,15 @@ export default function KitchenDisplay() {
     cancelOrder,
     getDeliveredHistory24h,
     refreshOrders,
+    waiterCalls,
+    dismissWaiterCall,
+    clearWaiterCalls,
   } = useRestaurant();
+
+
   const [now, setNow] = useState(new Date());
   const [activeTab, setActiveTab] = useState('live');
-  const [waiterCalls, setWaiterCalls] = useState([]);
+  
   // Live clock for elapsed time
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
@@ -74,43 +79,63 @@ export default function KitchenDisplay() {
   }, []);
 
   // MQTT listener for new orders
-  useEffect(() => {
-    // ✅ FIXED: Connect once and keep alive (don't disconnect on unmount)
-    // Only ONE connection per app lifetime, not per component
-    orderMqtt.connect();
+  // useEffect(() => {
+  //   // ✅ FIXED: Connect once and keep alive (don't disconnect on unmount)
+  //   // Only ONE connection per app lifetime, not per component
+  //   orderMqtt.connect();
 
-    const unsubNewOrder = orderMqtt.onNewOrder(async (mqttData) => {
-      console.log('🔔 New order notification via MQTT:', mqttData);
-      // Refresh orders from backend to get full data
-      // Only refresh for genuinely new orders (status PENDING)
-      // Ignore status update echoes from kitchen's own actions
-      if (mqttData?.status && mqttData.status !== 'PENDING') {
-        console.log('⏭️ Skipping refresh — status update echo, not a new order');
-        return;
-      }
-      await refreshOrders();
+  //   const unsubNewOrder = orderMqtt.onNewOrder(async (mqttData) => {
+  //     console.log('🔔 New order notification via MQTT:', mqttData);
+  //     // Refresh orders from backend to get full data
+  //     // Only refresh for genuinely new orders (status PENDING)
+  //     // Ignore status update echoes from kitchen's own actions
+  //     if (mqttData?.status && mqttData.status !== 'PENDING') {
+  //       console.log('⏭️ Skipping refresh — status update echo, not a new order');
+  //       return;
+  //     }
+  //     await refreshOrders();
 
-      const unsubWaiter = orderMqtt.onWaiterCall((data) => {
-        console.log('🔔 Waiter call received:', data);
-        setWaiterCalls(prev => [
-          { ...data, id: Date.now(), seen: false },
-          ...prev.slice(0, 9), // max 10 notifications
-        ]);
-      });
+  //     const unsubWaiter = orderMqtt.onWaiterCall((data) => {
+  //       console.log('🔔 Waiter call received:', data);
+  //       setWaiterCalls(prev => [
+  //         { ...data, id: Date.now(), seen: false },
+  //         ...prev.slice(0, 9), // max 10 notifications
+  //       ]);
+  //     });
 
-      // cleanup return
-      return () => {
-        unsubNewOrder();
-        unsubWaiter();
-      };
-    });
+  //     // cleanup return
+  //     return () => {
+  //       unsubNewOrder();
+  //       unsubWaiter();
+  //     };
+  //   });
 
-    // ✅ FIXED: Only unsubscribe, don't disconnect entire MQTT service
-    return () => {
-      unsubNewOrder();
-      // Don't call orderMqtt.disconnect() — it closes the connection for all listeners
-    };
-  }, [refreshOrders]);
+  //   // ✅ FIXED: Only unsubscribe, don't disconnect entire MQTT service
+  //   return () => {
+  //     unsubNewOrder();
+  //     // Don't call orderMqtt.disconnect() — it closes the connection for all listeners
+  //   };
+  // }, [refreshOrders]);
+
+
+  // ✅ FIXED — waiter listener context එකේ, මෙතන only orders
+useEffect(() => {
+  orderMqtt.connect();
+
+  const unsubNewOrder = orderMqtt.onNewOrder(async (mqttData) => {
+    console.log('🔔 New order notification via MQTT:', mqttData);
+    if (mqttData?.status && mqttData.status !== 'PENDING') {
+      console.log('⏭️ Skipping refresh — status update echo');
+      return;
+    }
+    await refreshOrders();
+  });
+
+  return () => {
+    unsubNewOrder();
+  };
+}, [refreshOrders]);
+
   // Only show non-delivered tickets on KDS live board
   const liveOrders = activeOrders.filter((o) => o.status !== ORDER_STATUS.DELIVERED);
   const deliveredHistory24h = useMemo(() => getDeliveredHistory24h(), [getDeliveredHistory24h]);
@@ -382,9 +407,7 @@ export default function KitchenDisplay() {
                 </div>
                 {/* Mark as seen */}
                 <button
-                  onClick={() => setWaiterCalls(prev =>
-                    prev.map(c => c.id === call.id ? { ...c, seen: true } : c)
-                  )}
+                  onClick={() => dismissWaiterCall(call.id)}
                   className="w-6 h-6 rounded-md bg-white/5 hover:bg-green-500/20 text-gray-600 hover:text-green-400 transition-all flex items-center justify-center flex-shrink-0 text-xs"
                 >
                   ✓
@@ -399,7 +422,7 @@ export default function KitchenDisplay() {
       {waiterCalls.length > 0 && (
         <div className="p-3 border-t border-white/5">
           <button
-            onClick={() => setWaiterCalls([])}
+            onClick={clearWaiterCalls}
             className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-500 hover:text-gray-300 text-xs font-medium transition-all"
           >
             Clear All
