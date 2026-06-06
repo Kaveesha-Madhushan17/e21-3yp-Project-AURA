@@ -3,7 +3,7 @@ import {
   ChefHat, Flame, Leaf, IceCreamCone, Coffee, UtensilsCrossed,
   Plus, Minus, LogOut, Sun, Moon, Lock, X,
   ShoppingCart, CreditCard, Trash2, CheckCircle2,
-  Clock, Bike, PartyPopper,Settings,
+  Clock, Bike, PartyPopper,Settings, Mic, Bot, Send // <-- Added Mic, Bot, Send
 } from 'lucide-react';
 import { useAppContext }             from '../../context/AppContext';
 import { useRestaurant, ORDER_STATUS } from '../../context/RestaurantContext';
@@ -47,6 +47,10 @@ export default function RobotUI() {
   const [waiterCalled, setWaiterCalled] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [modalMode, setModalMode] = useState('logout');
+
+  // -- New AI Chat States --
+  const [isListening, setIsListening] = useState(false);
+
   const { placeOrder, getUnpaidOrders } = useRestaurant();
   const navigate = useNavigate();
 
@@ -194,6 +198,29 @@ const confirmStaffAction = async () => {
     }
   }
 };
+
+// --- AI FUNCTIONS  ---
+  const getMenuContext = () => {
+    const simplifiedMenu = menuItems.map(item => ({
+      name: item.name,
+      price: item.price,
+      description: item.description
+    }));
+    return JSON.stringify(simplifiedMenu);
+  };
+
+  const triggerVoiceMic = () => {
+    setIsListening(true);
+    
+    orderMqtt.publish('aura/robot/ai-command', {
+      action: "START_VOICE_MIC",
+      menu: getMenuContext(),
+      tableNumber: session?.tableNumber || 'T1'
+    });
+    
+    // 10 second timeout gives AURA enough time to listen and think
+    setTimeout(() => setIsListening(false), 10000); 
+  };
 
   // ── Theme colour map ──
   const tc = {
@@ -443,6 +470,15 @@ const confirmStaffAction = async () => {
             className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all active:scale-90 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 hover:border-indigo-500/40`}>
             <span className="text-base">🎮</span>
             <span className="text-[9px] font-medium text-indigo-400">Games</span>
+          </button>
+
+          {/* --- VOICE MIC BUTTON --- */}
+          <button
+            onClick={triggerVoiceMic}
+            className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all active:scale-90 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 hover:border-sky-500/40`}
+          >
+            <Mic size={18} className="text-sky-500"/>
+            <span className="text-[9px] font-medium text-sky-500">Voice</span>
           </button>
 
           {/* Theme toggle */}
@@ -769,6 +805,33 @@ const confirmStaffAction = async () => {
       </div>
     )}
 
+    {/* --- REPLACE THE TYPING MODAL WITH THIS OVERLAY --- */}
+      {isListening && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 transition-all">
+          <div className="flex flex-col items-center gap-6">
+            
+            {/* Glowing Pulsing Mic */}
+            <div className="w-28 h-28 rounded-full bg-sky-500/20 flex items-center justify-center animate-pulse border-4 border-sky-500/50 shadow-[0_0_60px_rgba(14,165,233,0.5)]">
+              <Mic size={56} className="text-sky-400 animate-bounce" />
+            </div>
+            
+            {/* Text Prompts */}
+            <div className="text-center space-y-2">
+              <h3 className="text-3xl font-bold text-white tracking-wide">AURA is Listening...</h3>
+              <p className="text-sky-200 text-lg">Speak your question clearly into the robot</p>
+            </div>
+
+            {/* Cancel Button */}
+            <button
+              onClick={() => setIsListening(false)}
+              className="mt-8 px-8 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white font-medium transition-all active:scale-95 border border-white/20"
+            >
+              Cancel
+            </button>
+            
+          </div>
+        </div>
+      )}
     </div>
   );
 }
