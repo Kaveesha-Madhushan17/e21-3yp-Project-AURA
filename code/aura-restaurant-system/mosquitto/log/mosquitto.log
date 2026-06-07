@@ -556,3 +556,33 @@ To fix this, use `chmod 0700 /mosquitto/data//mosquitto.db.new`.
 
 1780781973: Warning: File /mosquitto/data//mosquitto.db.new group is not mosquitto. Future versions will refuse to load this file.
 
+1780820029: mosquitto version 2.1.2 starting
+1780820029: Config loaded from /mosquitto/config/mosquitto.conf.
+1780820029: Bridge support available.
+1780820029: Persistence support available.
+1780820029: TLS support available.
+1780820029: TLS-PSK support available.
+1780820029: Websockets support available.
+1780820029: Opening ipv4 listen socket on port 1883.
+1780820029: Opening ipv6 listen socket on port 1883.
+1780820029: Opening ipv4 listen socket on port 9001.
+1780820029: Opening ipv6 listen socket on port 9001.
+1780820029: mosquitto version 2.1.2 running
+1780820055: New connection from 172.18.0.2:50662 on port 1883.
+1780820055: New client connected from 172.18.0.2:50662 as aura-server-outbound (p4, c1, k60).
+1780820098: New connection from 172.18.0.2:40414 on port 1883.
+1780820098: New client connected from 172.18.0.2:40414 as aura-server-inbound (p4, c1, k60).
+1780820117: New connection from 172.18.0.1:42832 on port 9001.
+1780820117: New connection from 172.18.0.1:42836 on port 9001.
+1780820117: New client connected from 172.18.0.1:42832 as aura_web_5e3f15 (p4, c1, k60).
+1780820117: New client connected from 172.18.0.1:42836 as aura_web_c4781f (p4, c1, k60).
+1780820117: New connection from 172.18.0.1:42850 on port 9001.
+1780820117: New connection from 172.18.0.1:42854 on port 9001.
+1780820117: New client connected from 172.18.0.1:42850 as aura_web_9ce437 (p4, c1, k60).
+1780820117: New client connected from 172.18.0.1:42854 as aura_web_4942aa (p4, c1, k60).
+1780820139: Client aura_web_9ce437 [172.18.0.1:42850] disconnected: connection closed by client.
+1780820139: Client aura_web_4942aa [172.18.0.1:42854] disconnected: connection closed by client.
+1780820139: Client aura_web_c4781f [172.18.0.1:42836] disconnected: connection closed by client.
+1780820139: Client aura_web_5e3f15 [172.18.0.1:42832] disconnected: connection closed by client.
+1780820156: mosquitto version 2.1.2 terminating
+1780820156: Saving in-memory database to /mosquitto/data//mosquitto.db.
