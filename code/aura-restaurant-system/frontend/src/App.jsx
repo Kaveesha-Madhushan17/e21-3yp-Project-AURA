@@ -11,10 +11,13 @@ import Navbar from './components/layout/Navbar';
 import LoginPage from './pages/LoginPage/LoginPage';
 import RobotUI from './pages/RobotUI/RobotUI';
 import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
+import AnalyticsPage from './pages/AnalyticsPage/AnalyticsPage';
 import KitchenDisplay from './pages/KitchenDisplay/KitchenDisplay';
 import EntertainmentHub from "./pages/EntertainmentHub/EntertainmentHub";
 import MusicPage  from './pages/EntertainmentHub/MusicPage';
 import GamesPage  from './pages/EntertainmentHub/GamesPage';
+import StaffPage from './pages/StaffPage/StaffPage';
+import SettingsPage from './pages/SettingsPage/SettingsPage';
 
 // ── Protected route shell ─────────────────────────────────────────────────────
 function AppShell() {
@@ -54,6 +57,9 @@ function AppShell() {
           {isAdmin && (
             <>
               <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/analytics" element={<AnalyticsPage />} />
+              <Route path="/admin/staff" element={<StaffPage />} />
+              <Route path="/admin/settings" element={<SettingsPage />} />
               <Route path="/kitchen" element={<KitchenDisplay />} />
             </>
           )}
