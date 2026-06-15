@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAppContext }             from '../../context/AppContext';
 import { useRestaurant, ORDER_STATUS } from '../../context/RestaurantContext';
+import { formatPrice }               from '../../utils/helpers';
 import { getMenuImageSrc }           from '../../utils/menuImages';
 import { orderMqtt }                 from '../../api/mqttclient';
 import { useNavigate }               from 'react-router-dom';
@@ -360,7 +361,7 @@ const confirmStaffAction = async () => {
                       </div>
                       <div>
                         <div className="flex items-center justify-between mb-2 sm:mb-3 mt-1">
-                          <span className="text-sm sm:text-lg font-bold text-orange-500">${item.price.toFixed(2)}</span>
+                          <span className="text-sm sm:text-lg font-bold text-orange-500">{formatPrice(item.price)}</span>
                           <span className={`text-[9px] sm:text-xs ${tc.mc}`}>⏱ {item.time}</span>
                         </div>
 
@@ -623,8 +624,8 @@ const confirmStaffAction = async () => {
 
                     <div className="flex-1 min-w-0">
                       <p className={`font-semibold text-sm truncate ${tc.tt}`}>{item.name}</p>
-                      <p className="text-orange-500 text-sm font-bold">${(item.price * item.quantity).toFixed(2)}</p>
-                      <p className={`text-xs ${tc.st}`}>${item.price.toFixed(2)} each</p>
+                      <p className="text-orange-500 text-sm font-bold">{formatPrice(item.price * item.quantity)}</p>
+                      <p className={`text-xs ${tc.st}`}>{formatPrice(item.price)} each</p>
                     </div>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -654,7 +655,7 @@ const confirmStaffAction = async () => {
               <div className={`flex-shrink-0 px-6 py-4 border-t ${tc.divider} space-y-3`}>
                 <div className="flex items-center justify-between">
                   <span className={`text-sm font-medium ${tc.st}`}>Total</span>
-                  <span className="text-2xl font-bold text-orange-500">${cartTotal.toFixed(2)}</span>
+                  <span className="text-2xl font-bold text-orange-500">{formatPrice(cartTotal)}</span>
                 </div>
                 <div className={`flex items-center justify-between text-xs ${tc.st}`}>
                   <span>Table</span>
@@ -664,7 +665,7 @@ const confirmStaffAction = async () => {
                   className="w-full h-12 rounded-2xl bg-orange-500 hover:bg-orange-400 disabled:opacity-60 text-white font-bold text-base transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30">
                   {orderLoading
                     ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Sending to Kitchen...</>
-                    : <><CreditCard size={18}/> Confirm Order — ${cartTotal.toFixed(2)}</>
+                    : <><CreditCard size={18}/> Confirm Order — {formatPrice(cartTotal)}</>
                   }
                 </button>
                 <button onClick={() => setCart([])}

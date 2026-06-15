@@ -573,10 +573,10 @@ export default function AdminDashboard() {
                   {/* Price */}
                   <div>
                     <label className="block text-sm font-medium text-dark-300 mb-1.5">
-                      Price (USD) <span className="text-red-400">*</span>
+                      Price (LKR) <span className="text-red-400">*</span>
                     </label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-dark-400 font-bold">$</span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-dark-400 font-bold">Rs</span>
                       <input
                         id="menu-form-price"
                         type="number"
@@ -794,7 +794,7 @@ export default function AdminDashboard() {
                             <p className="text-xs text-dark-500 mt-1">⏱ {item.time}</p>
                           </div>
                           <span className="text-base font-bold text-aura-400 flex-shrink-0">
-                            ${item.price.toFixed(2)}
+                            {formatPrice(item.price)}
                           </span>
                           <button
                             id={`delete-item-${item.id}`}

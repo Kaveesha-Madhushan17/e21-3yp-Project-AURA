@@ -26,8 +26,6 @@ const MENU_ITEMS = [
   { path: '/admin/analytics', label: 'Analytics', icon: BarChart3,      disabled: false },
   // [BACKEND INTEGRATION: TODO] - GET /api/staff    → enable Staff page
   { path: '/admin/staff',     label: 'Staff',      icon: Users,          disabled: false },
-  // [BACKEND INTEGRATION: TODO] - GET /api/inventory → enable Inventory page
-  { path: '/admin/inventory', label: 'Inventory',  icon: Package,        disabled: true },
   { type: 'divider' },
   // [BACKEND INTEGRATION: TODO] - GET /api/settings → enable Settings page
   { path: '/admin/settings',  label: 'Settings',   icon: Settings,       disabled: false },
