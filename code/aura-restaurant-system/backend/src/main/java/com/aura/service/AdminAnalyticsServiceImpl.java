@@ -3,7 +3,6 @@ package com.aura.service;
 import com.aura.dto.admin.AdminStatsResponse;
 import com.aura.dto.admin.RevenueResponse;
 import com.aura.system.repositories.OrderRepository;
-import com.aura.system.repositories.PaymentRepository;
 //import com.aura.service.AdminAnalyticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,17 +16,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminAnalyticsServiceImpl implements AdminAnalyticsService {
 
     private static final String CURRENCY = "USD";
+    private static final String PAID_STATUS = "PAID";
 
-    private final OrderRepository   orderRepository;
-    private final PaymentRepository paymentRepository;
-    private final StaffRepository   staffRepository;
+    private final OrderRepository orderRepository;
+    private final StaffRepository staffRepository;
 
+    // All figures come from the orders table only (Order.status is the single
+    // source of truth) — Payment rows aren't consulted, since cash/card/mark-paid
+    // flows update Order.status directly and never write a Payment row.
     @Override
     public AdminStatsResponse getStats() {
 
-        float  confirmedRevenue  = paymentRepository.sumByPaymentStatus("paid");
-        float  pendingOrderTotal = orderRepository.sumUnpaidOrderTotals();
-        long   activeOrders      = orderRepository.countActiveOrders();
+        float  confirmedRevenue  = orderRepository.sumTotalsByStatus(PAID_STATUS);
+        float  pendingOrderTotal = orderRepository.sumTotalsByStatusNot(PAID_STATUS);
+        long   activeOrders      = orderRepository.countByStatusNot(PAID_STATUS);
         double avgDeliveryMins   = calcAvgDeliveryMins();
 
         return AdminStatsResponse.builder()
@@ -41,7 +43,9 @@ public class AdminAnalyticsServiceImpl implements AdminAnalyticsService {
     @Override
     public RevenueResponse getRevenue(String status) {
 
-        float total = paymentRepository.sumByPaymentStatus(status.toLowerCase());
+        float total = PAID_STATUS.equalsIgnoreCase(status)
+                ? orderRepository.sumTotalsByStatus(PAID_STATUS)
+                : orderRepository.sumTotalsByStatusNot(PAID_STATUS);
 
         return RevenueResponse.builder()
                 .total(round(total))

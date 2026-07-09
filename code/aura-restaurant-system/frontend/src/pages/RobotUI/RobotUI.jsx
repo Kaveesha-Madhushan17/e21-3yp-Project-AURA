@@ -13,6 +13,8 @@ import { orderMqtt }                 from '../../api/mqttclient';
 import { useNavigate }               from 'react-router-dom';
 import OrderHistoryModal             from '../../components/OrderHistoryModal/OrderHistoryModal';
 import waiterAPI                     from '../../api/waiterAPI';
+import orderAPI                      from '../../api/orderAPI';
+import paymentAPI                    from '../../api/paymentAPI';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CATS = [
@@ -54,7 +56,7 @@ export default function RobotUI() {
   // -- New AI Chat States --
   const [isListening, setIsListening] = useState(false);
 
-  const { placeOrder, getUnpaidOrders } = useRestaurant();
+  const { placeOrder, getUnpaidOrders, markTablePaid } = useRestaurant();
   const navigate = useNavigate();
 
   // ── MQTT ──
@@ -91,6 +93,18 @@ export default function RobotUI() {
   const [showCart, setShowCart]         = useState(false);
   const [orderPlaced, setOrderPlaced]   = useState(false);
   const [orderLoading, setOrderLoading] = useState(false);
+
+  // ── Payment (Pay by Cash / Pay by Card) state ──
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentLoading, setPaymentLoading]     = useState(false);
+  const [billOrders, setBillOrders]             = useState([]);
+  const [billTotal, setBillTotal]                = useState(0);
+  const [paymentError, setPaymentError]         = useState('');
+  const [payingCash, setPayingCash]             = useState(false);
+  const [payingCard, setPayingCard]             = useState(false);
+  const [cashRequestSent, setCashRequestSent]   = useState(false);
+  const [cardPaymentSuccess, setCardPaymentSuccess] = useState(false);
+  const [canPay, setCanPay]                     = useState(true);
 
   const numericTableId = session?.tableNumber
     ? parseInt(session.tableNumber.replace(/\D/g, ''), 10) || 1
@@ -177,6 +191,140 @@ export default function RobotUI() {
     }
   };
 
+  // ── Payment: load bill for the CURRENT (latest) customer session at this table ──
+  const openPaymentModal = async () => {
+    setShowPaymentModal(true);
+    setPaymentLoading(true);
+    setPaymentError('');
+    try {
+      const sessionId = session?.walkInSessionId;
+      if (!sessionId) throw new Error('No active session for this table.');
+
+      // Only this table's LATEST session's orders — never older/previous customers.
+      const sessionOrders = await orderAPI.getOrdersBySession(sessionId);
+      const unpaid = sessionOrders.filter(o => o.status !== 'PAID');
+      const total  = unpaid.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+      // Don't allow payment until every food item has actually been delivered.
+      const allDelivered = unpaid.every(o => o.status === 'DELIVERED');
+
+      setBillOrders(unpaid);
+      setBillTotal(total);
+      setCanPay(allDelivered);
+    } catch (err) {
+      console.error('Failed to load bill:', err);
+      setPaymentError('Could not load your bill. Please try again.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  // ── Pay by Cash: notify staff via the same channel as "Ask Waiter" ──
+  const handlePayByCash = async () => {
+    if (!canPay) {
+      setPaymentError('Please wait until all your food has been delivered before paying.');
+      return;
+    }
+    setPayingCash(true);
+    setPaymentError('');
+    try {
+      await waiterAPI.callWaiter(
+        numericTableId,
+        table,
+        `💵 Cash payment requested — Bill: ${formatPrice(billTotal)}`
+      );
+      setShowPaymentModal(false);
+      setCashRequestSent(true);
+      setTimeout(() => setCashRequestSent(false), 3000);
+    } catch (err) {
+      console.error('Cash payment request failed:', err);
+      setPaymentError('Failed to notify staff. Please try again.');
+    } finally {
+      setPayingCash(false);
+    }
+  };
+
+  // ── Pay by Card: PayHere checkout (sandbox) ──
+  const handlePayByCard = async () => {
+    if (!canPay) {
+      setPaymentError('Please wait until all your food has been delivered before paying.');
+      return;
+    }
+    if (!window.payhere) {
+      setPaymentError('Card payment is not available right now.');
+      return;
+    }
+    setPayingCard(true);
+    setPaymentError('');
+    try {
+      // Backend computes order_id + hash using the merchant secret — never done in the browser.
+      const init = await paymentAPI.initiatePayHerePayment({
+        tableId: numericTableId,
+        tableNumber: table,
+        sessionId: session?.walkInSessionId,
+        amount: billTotal,
+      });
+
+      const payment = {
+        sandbox: init.sandbox,
+        merchant_id: init.merchantId,
+        return_url: window.location.href,
+        cancel_url: window.location.href,
+        notify_url: init.notifyUrl,
+        order_id: init.orderId,
+        items: `AURA Table ${table} Bill`,
+        amount: init.amount,
+        currency: init.currency,
+        hash: init.hash,
+        // Placeholder details — customer can edit these on PayHere's own checkout page.
+        first_name: 'Guest',
+        last_name: table,
+        email: 'guest@aura-restaurant.local',
+        phone: '0770000000',
+        address: 'AURA Restaurant',
+        city: 'Colombo',
+        country: 'Sri Lanka',
+      };
+
+      window.payhere.onCompleted = async (orderId) => {
+        try {
+          await markTablePaid(table);
+        } catch (err) {
+          console.error('Failed to mark table paid after card payment:', err);
+        }
+        try {
+          await waiterAPI.callWaiter(
+            numericTableId,
+            table,
+            `💳 Card payment completed — Bill: ${formatPrice(billTotal)} (PayHere: ${orderId})`
+          );
+        } catch (err) {
+          console.error('Failed to notify staff of card payment:', err);
+        }
+        setShowPaymentModal(false);
+        setCardPaymentSuccess(true);
+        setTimeout(() => setCardPaymentSuccess(false), 3000);
+        setPayingCard(false);
+      };
+
+      window.payhere.onDismissed = () => {
+        setPayingCard(false);
+      };
+
+      window.payhere.onError = (error) => {
+        console.error('PayHere error:', error);
+        setPaymentError('Card payment failed. Please try again.');
+        setPayingCard(false);
+      };
+
+      window.payhere.startPayment(payment);
+    } catch (err) {
+      console.error('Failed to start card payment:', err);
+      setPaymentError('Could not start card payment. Please try again.');
+      setPayingCard(false);
+    }
+  };
+
   // ── Staff logout ──
 const confirmStaffAction = async () => {
   if (!lUser || !lPass) { setLErr('Enter username and password.'); return; }
@@ -190,7 +338,16 @@ const confirmStaffAction = async () => {
   if (modalMode === 'logout') {
     logout();
   } else {
-    // New customer — get current unpaid order IDs to hide them
+    // New customer — close out the previous customer's bill before starting fresh
+    try {
+      await markTablePaid(session?.tableNumber);
+    } catch (err) {
+      console.error('Failed to mark previous bill as paid:', err);
+      setLErr('Could not close the previous bill. Try again.');
+      return;
+    }
+
+    // Get current unpaid order IDs to hide them from the new customer's view
     const currentOrderIds = allUnpaidOrders.map(o => o.id);
     const success = await startNewCustomerSession(session?.tableNumber, currentOrderIds);
     if (success) {
@@ -456,7 +613,7 @@ const confirmStaffAction = async () => {
 
           {/* 💳 Pay */}
           <button
-            onClick={() => alert('Pay button clicked!')}
+            onClick={openPaymentModal}
             className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center transition-all active:scale-90 ${D ? 'bg-white/5 hover:bg-white/15 text-green-400' : 'bg-gray-100 hover:bg-gray-200 text-green-600'}`}>
             <CreditCard size={15} className="sm:w-[17px] sm:h-[17px]"/>
           </button>
@@ -681,6 +838,97 @@ const confirmStaffAction = async () => {
       )}
 
       {/* ══════════════════════════════════════════════════
+          PAYMENT (PAY BY CASH) MODAL
+      ══════════════════════════════════════════════════ */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6">
+          <div className={`w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl border shadow-2xl flex flex-col max-h-[90vh] ${tc.modal}`}>
+
+            {/* Header */}
+            <div className={`flex-shrink-0 flex items-center justify-between px-6 py-4 border-b ${tc.divider}`}>
+              <div className="flex items-center gap-3">
+                <CreditCard size={20} className="text-green-500"/>
+                <h2 className={`text-lg font-bold ${tc.tt}`}>Your Bill — {table}</h2>
+              </div>
+              <button onClick={() => setShowPaymentModal(false)}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90 ${tc.btn2}`}>
+                <X size={16}/>
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+              {paymentLoading ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                  <div className="w-8 h-8 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin"/>
+                  <p className={`text-sm ${tc.st}`}>Loading your bill…</p>
+                </div>
+              ) : billOrders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-3">
+                  <CheckCircle2 size={36} className={tc.mc}/>
+                  <p className={`text-sm ${tc.st}`}>Nothing pending — all paid up!</p>
+                </div>
+              ) : (
+                billOrders.map(o => (
+                  <div key={o.orderId} className={`flex items-center justify-between p-3 rounded-2xl border ${tc.cartRow}`}>
+                    <div>
+                      <p className={`font-semibold text-sm ${tc.tt}`}>Order #{o.orderId}</p>
+                      <p className={`text-xs ${tc.st}`}>{o.status}</p>
+                    </div>
+                    <p className="text-orange-500 font-bold text-sm">{formatPrice(o.totalAmount || 0)}</p>
+                  </div>
+                ))
+              )}
+
+              {paymentError && (
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20">
+                  <span className="text-red-400 text-sm">⚠️</span>
+                  <span className="text-xs text-red-400">{paymentError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {!paymentLoading && billOrders.length > 0 && (
+              <div className={`flex-shrink-0 px-6 py-4 border-t ${tc.divider} space-y-3`}>
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm font-medium ${tc.st}`}>Total Due</span>
+                  <span className="text-2xl font-bold text-green-500">{formatPrice(billTotal)}</span>
+                </div>
+
+                {canPay ? (
+                  <div className="flex gap-3">
+                    <button onClick={handlePayByCash} disabled={payingCash || payingCard}
+                      className="flex-1 h-12 rounded-2xl bg-green-500 hover:bg-green-400 disabled:opacity-60 text-white font-bold text-sm sm:text-base transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-green-500/30">
+                      {payingCash
+                        ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Notifying...</>
+                        : <>💵 Pay by Cash</>
+                      }
+                    </button>
+                    <button onClick={handlePayByCard} disabled={payingCash || payingCard}
+                      className="flex-1 h-12 rounded-2xl bg-blue-500 hover:bg-blue-400 disabled:opacity-60 text-white font-bold text-sm sm:text-base transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30">
+                      {payingCard
+                        ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Opening...</>
+                        : <>💳 Pay by Card</>
+                      }
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/25">
+                    <span className="text-lg">⏳</span>
+                    <p className="text-xs font-medium text-amber-400">
+                      Payment unlocks once all your food has been delivered.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════
                   ORDER SUCCESS TOAST
           ══════════════════════════════════════════════════ */}
       {orderPlaced && (
@@ -700,6 +948,28 @@ const confirmStaffAction = async () => {
           <div>
             <p className="font-bold text-sm">Waiter Called!</p>
             <p className="text-xs text-yellow-100">Staff member will assist you shortly 😊</p>
+          </div>
+        </div>
+      )}
+
+      {/* 💵 Cash Payment Requested Toast */}
+      {cashRequestSent && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl bg-green-500 text-white shadow-2xl shadow-green-500/40 animate-bounce">
+          <span className="text-xl">💵</span>
+          <div>
+            <p className="font-bold text-sm">Staff Notified!</p>
+            <p className="text-xs text-green-100">A staff member will come to collect cash payment 😊</p>
+          </div>
+        </div>
+      )}
+
+      {/* 💳 Card Payment Success Toast */}
+      {cardPaymentSuccess && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl bg-blue-500 text-white shadow-2xl shadow-blue-500/40 animate-bounce">
+          <span className="text-xl">💳</span>
+          <div>
+            <p className="font-bold text-sm">Payment Successful!</p>
+            <p className="text-xs text-blue-100">Thank you — your bill has been paid 🎉</p>
           </div>
         </div>
       )}

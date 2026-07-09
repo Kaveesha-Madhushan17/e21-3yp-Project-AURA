@@ -38,27 +38,6 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
         
     // ── new: admin analytics ─────────────────────────────────────────────────
 
-    /**
-     * Counts orders whose status is PENDING or PREPARING.
-     * These are the "in-flight" orders visible on the kitchen dashboard.
-     */
-    @Query("SELECT COUNT(o) FROM Order o WHERE o.status IN ('pending', 'preparing')")
-    long countActiveOrders();
-
-    /**
-     * Sums totalAmount for orders that have no matching PAID payment.
-     * NOT EXISTS handles the case where the payment row is missing entirely.
-     * COALESCE returns 0.0 instead of null when no unpaid orders exist.
-     */
-    @Query("""
-        SELECT COALESCE(SUM(o.totalAmount), 0.0) FROM Order o
-        WHERE NOT EXISTS (
-            SELECT 1 FROM Payment p
-            WHERE p.order = o AND p.paymentStatus = 'paid'
-        )
-        """)
-    Float sumUnpaidOrderTotals();
-
     @Query("""
     SELECT o FROM Order o
     WHERE o.status = 'DELIVERED'
@@ -73,5 +52,25 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
         @Param("status") String status
     );
 
-    
+    /**
+     * Sums totalAmount for orders whose status matches exactly (e.g. "PAID").
+     * Reads only the orders table — no join against payment.
+     */
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0.0) FROM Order o WHERE o.status = :status")
+    Float sumTotalsByStatus(@Param("status") String status);
+
+    /**
+     * Sums totalAmount for orders whose status is anything other than the given one
+     * (e.g. everything not yet "PAID"). Reads only the orders table.
+     */
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0.0) FROM Order o WHERE o.status <> :status")
+    Float sumTotalsByStatusNot(@Param("status") String status);
+
+    /**
+     * Counts orders whose status is anything other than the given one
+     * (e.g. every unpaid order, regardless of PENDING/PREPARING/READY/DELIVERED).
+     */
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status <> :status")
+    long countByStatusNot(@Param("status") String status);
+
 }
