@@ -47,6 +47,7 @@ public class SecurityConfig {
             "/api/ratings/**",
             "/api/walk-in-sessions/**",
             "/api/waiter/**",
+            "/api/payments/payhere/**",
             "/swagger-ui/**",
             "/swagger-ui.html",
             "/v3/api-docs/**",

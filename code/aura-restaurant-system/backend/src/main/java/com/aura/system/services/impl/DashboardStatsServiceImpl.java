@@ -48,45 +48,31 @@ public class DashboardStatsServiceImpl implements DashboardStatsService {
 
     /**
      * Calculate current dashboard statistics.
-     * 
-     * Stats include:
-     * - confirmedRevenue: Sum of all PAID payments
-     * - activeOrderCount: Count of PENDING + PREPARING orders
-     * - pendingTotal: Sum of unpaid orders (PENDING + PREPARING)
+     *
+     * Stats include (derived from the orders table only — a Payment row is
+     * never consulted here, since Order.status is the single source of truth):
+     * - confirmedRevenue: Sum of orders.total_amount where status = PAID
+     * - activeOrderCount: Count of orders where status <> PAID (i.e. unpaid orders)
+     * - pendingTotal: Sum of orders.total_amount where status <> PAID
      */
     @Override
     public Map<String, Object> getDashboardStats() {
         Map<String, Object> stats = new HashMap<>();
 
         try {
-            // 1. Confirmed Revenue — Sum of paid payments
-            // 1. Confirmed Revenue — Sum of PAID orders
-            float confirmedRevenue = 0.0f;
-            var paidOrders = orderRepository.findByStatus("PAID");
-            for (var order : paidOrders) {
-                confirmedRevenue += order.getTotalAmount() != null ? order.getTotalAmount() : 0.0f;
-            }
+            // 1. Confirmed Revenue — orders whose status is PAID
+            float confirmedRevenue = orderRepository.sumTotalsByStatus("PAID");
             stats.put("confirmedRevenue", confirmedRevenue);
 
-            // 2. Active Order Count — PENDING + PREPARING orders
-            int pendingCount = orderRepository.findByStatus("PENDING").size();
-            int preparingCount = orderRepository.findByStatus("PREPARING").size();
-            int activeOrderCount = pendingCount + preparingCount;
+            // 2. Active Order Count — every unpaid order (status <> PAID)
+            long activeOrderCount = orderRepository.countByStatusNot("PAID");
             stats.put("activeOrderCount", activeOrderCount);
 
-            // 3. Pending Order Total — Sum of unpaid orders
-            float pendingTotal = 0.0f;
-            var pendingOrders = orderRepository.findByStatus("PENDING");
-            for (var order : pendingOrders) {
-                pendingTotal += order.getTotalAmount() != null ? order.getTotalAmount() : 0.0f;
-            }
-            var preparingOrders = orderRepository.findByStatus("PREPARING");
-            for (var order : preparingOrders) {
-                pendingTotal += order.getTotalAmount() != null ? order.getTotalAmount() : 0.0f;
-            }
+            // 3. Pending Order Total — every order whose status is anything but PAID
+            float pendingTotal = orderRepository.sumTotalsByStatusNot("PAID");
             stats.put("pendingTotal", pendingTotal);
 
-            log.debug("Dashboard stats calculated | Revenue: ${}, Active Orders: {}, Pending: ${}", 
+            log.debug("Dashboard stats calculated | Revenue: ${}, Active Orders: {}, Pending: ${}",
                 confirmedRevenue, activeOrderCount, pendingTotal);
 
         } catch (Exception e) {

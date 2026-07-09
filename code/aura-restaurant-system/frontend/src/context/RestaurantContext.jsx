@@ -122,7 +122,7 @@ function normalizeBackendOrder(raw) {
     })),
     status: raw.status,
     total: raw.totalAmount || 0,
-    isPaid: false,
+    isPaid: raw.status === ORDER_STATUS.PAID,
     isAddon: false,
     createdAt: raw.orderTime ? new Date(raw.orderTime) : new Date(),
     deliveredAt: raw.deliveredAt ? new Date(raw.deliveredAt) : null,

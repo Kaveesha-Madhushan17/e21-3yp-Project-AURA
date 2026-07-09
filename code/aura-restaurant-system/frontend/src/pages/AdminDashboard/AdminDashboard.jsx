@@ -134,7 +134,12 @@ export default function AdminDashboard() {
   // [DATA SYNC]: Pending total tracks kitchen-sent but unpaid orders for accurate outstanding exposure.
   // Falls back to computed value if MQTT stats not yet received
   const pendingOrderTotal = realtimeStats.pendingTotal || getPendingOrderTotal();
-  const activeOrderCount = realtimeStats.activeOrderCount || activeOrders.length;
+
+  // "Active Orders" = count of unpaid orders (status <> PAID), matching the
+  // backend's activeOrderCount. Computed from orderHistory (not the shared
+  // `activeOrders` array, which means "not yet delivered" and is used by KDS).
+  const unpaidOrderCount = orderHistory.filter((o) => !o.isPaid).length;
+  const activeOrderCount = realtimeStats.activeOrderCount || unpaidOrderCount;
 
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'menu'
 
