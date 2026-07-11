@@ -7,11 +7,11 @@ import java.time.LocalDateTime;
 @Data
 public class CreateReservationRequest {
 
-    @NotNull(message = "Table ID is required")
-    private Integer tableId;
-
     @NotBlank(message = "Customer name is required")
     private String customerName;
+
+    private String email;
+    private String phone;
 
     @NotNull
     @Min(value = 1, message = "Party size must be at least 1")

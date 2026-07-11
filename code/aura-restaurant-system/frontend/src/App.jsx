@@ -19,6 +19,8 @@ import GamesPage  from './pages/EntertainmentHub/GamesPage';
 import StaffPage from './pages/StaffPage/StaffPage';
 import SettingsPage from './pages/SettingsPage/SettingsPage';
 import { MusicPlayerProvider } from './context/MusicPlayerContext';
+import LandingPage from './pages/LandingPage/LandingPage';
+import ReservationPage from './pages/ReservationPage/ReservationPage';
 
 // ── Protected route shell ─────────────────────────────────────────────────────
 function AppShell() {
@@ -90,7 +92,16 @@ function App() {
     <Router>
       <AppProvider>
         <RestaurantProvider>
-          <AppShell />
+          <Routes>
+            {/* ── Public Customer Pages ── */}
+            <Route path="/" element={<Navigate to="/landing" replace />} />
+            <Route path="/landing" element={<LandingPage />} />
+            <Route path="/reserve" element={<ReservationPage />} />
+            
+            {/* ── Authenticated App Shell ── */}
+            {/* Catch-all route passes everything else to the auth shell */}
+            <Route path="/*" element={<AppShell />} />
+          </Routes>
         </RestaurantProvider>
       </AppProvider>
     </Router>

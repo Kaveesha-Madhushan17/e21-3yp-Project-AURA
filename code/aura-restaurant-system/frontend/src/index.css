@@ -162,3 +162,25 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* ─── Landing Page Utilities ─── */
+@layer components {
+  .glass-gold {
+    background: rgba(253, 224, 71, 0.05);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(253, 224, 71, 0.15);
+  }
+
+  .text-gradient-gold {
+    background: linear-gradient(135deg, #fde047, #ca8a04);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .landing-section {
+    padding-top: 6rem;
+    padding-bottom: 6rem;
+  }
+}

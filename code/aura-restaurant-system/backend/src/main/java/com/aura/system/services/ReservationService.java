@@ -11,5 +11,7 @@ public interface ReservationService {
     List<ReservationResponse> getAllReservations();
     ReservationResponse getReservationById(Integer reservationId);
     TableAvailabilityResponse checkTableAvailability(Integer tableId, LocalDateTime time);
+    com.aura.system.dtos.response.SlotAvailabilityResponse getAvailableSlots(String date);
+    com.aura.system.dtos.response.AvailabilityCheckResponse checkSlotAvailability(String date, String timeSlot);
     ReservationResponse cancelReservation(Integer reservationId);
 }

@@ -32,6 +32,17 @@ export default {
                     green: '#10b981',
                     orange: '#f59e0b',
                 },
+                gold: {
+                    300: '#fde047',
+                    400: '#facc15',
+                    500: '#eab308',
+                    600: '#ca8a04',
+                },
+                emerald: {
+                    400: '#34d399',
+                    500: '#10b981',
+                    600: '#059669',
+                },
                 dark: {
                     50: '#e6e8ec',
                     100: '#c2c7d0',
@@ -51,9 +62,12 @@ export default {
                 'float': 'float 6s ease-in-out infinite',
                 'slide-up': 'slideUp 0.5s ease-out',
                 'slide-in-right': 'slideInRight 0.3s ease-out',
+                'slide-in-left': 'slideInLeft 0.5s ease-out',
                 'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
                 'shimmer': 'shimmer 2s linear infinite',
                 'bounce-soft': 'bounceSoft 0.8s ease-in-out',
+                'fade-up': 'fadeUp 0.7s ease-out forwards',
+                'scale-in': 'scaleIn 0.5s ease-out forwards',
             },
             keyframes: {
                 glow: {
@@ -68,9 +82,21 @@ export default {
                     '0%': { opacity: '0', transform: 'translateY(20px)' },
                     '100%': { opacity: '1', transform: 'translateY(0)' },
                 },
+                fadeUp: {
+                    '0%': { opacity: '0', transform: 'translateY(30px)' },
+                    '100%': { opacity: '1', transform: 'translateY(0)' },
+                },
                 slideInRight: {
                     '0%': { opacity: '0', transform: 'translateX(20px)' },
                     '100%': { opacity: '1', transform: 'translateX(0)' },
+                },
+                slideInLeft: {
+                    '0%': { opacity: '0', transform: 'translateX(-30px)' },
+                    '100%': { opacity: '1', transform: 'translateX(0)' },
+                },
+                scaleIn: {
+                    '0%': { opacity: '0', transform: 'scale(0.9)' },
+                    '100%': { opacity: '1', transform: 'scale(1)' },
                 },
                 pulseSoft: {
                     '0%, 100%': { opacity: '1' },

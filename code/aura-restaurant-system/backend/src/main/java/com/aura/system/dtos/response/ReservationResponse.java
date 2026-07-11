@@ -12,6 +12,8 @@ public class ReservationResponse {
     private String        tableNumber;
     private Integer       tableCapacity;
     private String        customerName;
+    private String        email;
+    private String        phone;
     private Integer       partySize;
     private LocalDateTime reservationTime;
     private String        status;
