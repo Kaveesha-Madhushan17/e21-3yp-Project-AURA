@@ -24,6 +24,19 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+  mail:
+    host: ${SPRING_MAIL_HOST:smtp.example.com}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:pdnprojectaura17@gmail.com}
+    password: ${SPRING_MAIL_PASSWORD:change-me}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 server:
   port: 8080
 
@@ -44,3 +57,9 @@ springdoc:
     path: /swagger-ui.html
   api-docs:
     path: /v3/api-docs
+
+aura:
+  notifications:
+    enabled: ${AURA_NOTIFICATIONS_ENABLED:true}
+    recipient: ${AURA_NOTIFICATION_EMAIL:pdnprojectaura17@gmail.com}
+    sender: ${AURA_NOTIFICATION_SENDER:pdnprojectaura17@gmail.com}

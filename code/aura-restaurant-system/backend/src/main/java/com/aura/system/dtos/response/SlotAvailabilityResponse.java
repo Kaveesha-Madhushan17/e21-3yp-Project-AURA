@@ -15,5 +15,9 @@ public class SlotAvailabilityResponse {
     public static class SlotInfo {
         private String time;
         private boolean available;
+        private Integer availableTables;
+        // When a specific tableNumber is requested, this field indicates whether that
+        // table is free for the slot (true), booked (false), or null when not applicable.
+        private Boolean tableAvailable;
     }
 }

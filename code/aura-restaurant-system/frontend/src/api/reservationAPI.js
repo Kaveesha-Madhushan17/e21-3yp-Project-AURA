@@ -14,10 +14,15 @@ export const reservationAPI = {
    * @param {string} date - Date in 'YYYY-MM-DD' format
    * @returns {Promise<Object>} SlotAvailabilityResponse from backend
    */
-  getAvailableSlots: async (date) => {
+  getAvailableSlots: async (date, partySize, tableNumber) => {
     try {
-      const response = await axiosInstance.get('/reservations/available', {
-        params: { date },
+      const params = { date };
+      if (partySize != null) params.partySize = partySize;
+      if (tableNumber) params.tableNumber = tableNumber;
+
+      const url = tableNumber ? '/reservations/availability' : '/reservations/available';
+      const response = await axiosInstance.get(url, {
+        params,
       });
       return response.data;
     } catch (error) {

@@ -17,15 +17,53 @@ export default function ReservationPage() {
     const navigate = useNavigate();
     const [step, setStep] = useState(1); // 1: details & date, 2: success
     
-    // Form State
+    const today = new Date();
+    const minReservationDate = today.toISOString().split('T')[0];
+    const maxReservationDate = (() => {
+        const future = new Date(today);
+        future.setMonth(future.getMonth() + 1);
+        return future.toISOString().split('T')[0];
+    })();
+
+    const TABLE_COUNT = 10;
+    const BOOKING_DURATION_HOURS = 2;
+
     const [formData, setFormData] = useState({
         customerName: '',
         customerEmail: '',
         customerPhone: '',
         partySize: 2,
-        reservationDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+        tableNumber: '1',
+        reservationDate: minReservationDate, // YYYY-MM-DD
         timeSlot: ''
     });
+
+    const formatTimeLabel = (timeString) => {
+        const [hour, minute] = timeString.split(':').map(Number);
+        const date = new Date();
+        date.setHours(hour, minute, 0, 0);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const formatSlotLabel = (slotTime) => {
+        const [hour, minute] = slotTime.split(':').map(Number);
+        const start = new Date();
+        start.setHours(hour, minute, 0, 0);
+        const end = new Date(start);
+        end.setHours(end.getHours() + BOOKING_DURATION_HOURS);
+
+        return `${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    };
+
+    const formatReservationDate = (dateTime) => {
+        const date = new Date(dateTime);
+        return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    const formatReservationTime = (dateTime) => {
+        const date = new Date(dateTime);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
 
     // Slots state
     const [slots, setSlots] = useState([]);
@@ -34,17 +72,22 @@ export default function ReservationPage() {
     // Submission state
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState(null);
+    const [fieldErrors, setFieldErrors] = useState({});
     const [confirmedData, setConfirmedData] = useState(null);
 
-    // Fetch slots when date changes
+    // Fetch slots when date, partySize, or tableNumber changes
     useEffect(() => {
         const fetchSlots = async () => {
             setLoadingSlots(true);
             setError(null);
             try {
-                const response = await reservationAPI.getAvailableSlots(formData.reservationDate);
+                const response = await reservationAPI.getAvailableSlots(
+                    formData.reservationDate,
+                    Number(formData.partySize),
+                    formData.tableNumber
+                );
                 setSlots(response.slots || []);
-                // Reset selected time if it's no longer available on this new date
+                // Reset selected time if it's no longer available after date/party/table changes
                 setFormData(prev => ({ ...prev, timeSlot: '' }));
             } catch (err) {
                 setError("Could not load available times. Please try again.");
@@ -56,11 +99,37 @@ export default function ReservationPage() {
         if (formData.reservationDate) {
             fetchSlots();
         }
-    }, [formData.reservationDate]);
+    }, [formData.reservationDate, formData.partySize, formData.tableNumber]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+        setFieldErrors(prev => {
+            const copy = { ...prev };
+            delete copy[name];
+            return copy;
+        });
+    };
+
+    const buildReservationTime = () => {
+        if (!formData.reservationDate || !formData.timeSlot) {
+            return null;
+        }
+
+        const [year, month, day] = formData.reservationDate.split('-').map(Number);
+        const [hour, minute] = formData.timeSlot.split(':').map(Number);
+        const reservationDateTime = new Date(year, month - 1, day, hour, minute, 0, 0);
+
+        if (Number.isNaN(reservationDateTime.getTime())) {
+            return null;
+        }
+
+        if (reservationDateTime <= new Date()) {
+            return null;
+        }
+
+        const pad = (value) => String(value).padStart(2, '0');
+        return `${reservationDateTime.getFullYear()}-${pad(reservationDateTime.getMonth() + 1)}-${pad(reservationDateTime.getDate())}T${pad(reservationDateTime.getHours())}:${pad(reservationDateTime.getMinutes())}:00`;
     };
 
     const handleSubmit = async (e) => {
@@ -69,8 +138,25 @@ export default function ReservationPage() {
         setIsSubmitting(true);
 
         try {
+            setFieldErrors({});
+            const reservationTime = buildReservationTime();
+            if (!reservationTime) {
+                setError('Please select a valid future time slot.');
+                setIsSubmitting(false);
+                return;
+            }
+
+            const payload = {
+                customerName: formData.customerName,
+                email: formData.customerEmail,
+                phone: formData.customerPhone,
+                partySize: Number(formData.partySize),
+                tableNumber: formData.tableNumber,
+                reservationTime,
+            };
+
             // 1. Submit booking (backend checks availability and locks atomically)
-            const response = await reservationAPI.createReservation(formData);
+            const response = await reservationAPI.createReservation(payload);
             
             // 2. Success!
             setConfirmedData(response);
@@ -79,10 +165,21 @@ export default function ReservationPage() {
             // 409 Conflict means slot was taken
             if (err.response?.status === 409) {
                 setError("Sorry, that time slot was just booked by someone else. Please choose another time.");
-                // Refresh slots
-                const response = await reservationAPI.getAvailableSlots(formData.reservationDate);
+                const response = await reservationAPI.getAvailableSlots(
+                    formData.reservationDate,
+                    Number(formData.partySize)
+                );
                 setSlots(response.slots || []);
                 setFormData(prev => ({ ...prev, timeSlot: '' }));
+            } else if (err.response?.status === 400) {
+                const fieldErrors = err.response?.data?.fields || {};
+                const validationMessage = Object.entries(fieldErrors)
+                    .map(([field, msg]) => `${field}: ${msg}`)
+                    .join('; ');
+
+                console.error('Reservation validation failed:', fieldErrors);
+                setFieldErrors(fieldErrors);
+                setError(validationMessage || err.response?.data?.error || "An error occurred while booking. Please try again.");
             } else {
                 setError(err.response?.data?.error || "An error occurred while booking. Please try again.");
             }
@@ -117,15 +214,19 @@ export default function ReservationPage() {
                     <div className="bg-dark-900/50 rounded-xl p-6 text-left space-y-4 mb-8 border border-white/5">
                         <div className="flex items-center gap-3 text-dark-100">
                             <CalendarIcon size={18} className="text-gold-400" />
-                            <span>{confirmedData.reservationDate}</span>
+                            <span>{formatReservationDate(confirmedData.reservationTime)}</span>
                         </div>
                         <div className="flex items-center gap-3 text-dark-100">
                             <Clock size={18} className="text-neon-cyan" />
-                            <span>{confirmedData.timeSlot}</span>
+                            <span>{formatReservationTime(confirmedData.reservationTime)} - {formatReservationTime(new Date(new Date(confirmedData.reservationTime).setHours(new Date(confirmedData.reservationTime).getHours() + BOOKING_DURATION_HOURS)))}</span>
                         </div>
                         <div className="flex items-center gap-3 text-dark-100">
                             <Users size={18} className="text-neon-blue" />
-                            <span>{confirmedData.partySize} Guests</span>
+                            <span>{confirmedData.partySize} Guests · Table {confirmedData.tableNumber}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-dark-100">
+                            <span className="text-dark-300">Contact:</span>
+                            <span>{confirmedData.email} · {confirmedData.phone}</span>
                         </div>
                     </div>
 
@@ -170,7 +271,7 @@ export default function ReservationPage() {
                         <div>
                             <h2 className="text-3xl font-display font-bold text-white mb-4">Book a Table</h2>
                             <p className="text-dark-300 text-sm leading-relaxed mb-8">
-                                Experience the future of dining. Select your preferred date and time. Reservations are held for 15 minutes.
+                                Experience the future of dining. Select your preferred date and time. Reservations are held for 2 hours.
                             </p>
                         </div>
                         
@@ -181,8 +282,33 @@ export default function ReservationPage() {
                                 </div>
                                 <div>
                                     <div className="text-sm text-dark-300">Opening Hours</div>
-                                    <div className="font-medium text-white">11:00 AM - 10:00 PM</div>
+                                    <div className="font-medium text-white">11:00 AM - 11:00 PM</div>
                                 </div>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-neon-cyan/10 flex items-center justify-center text-neon-cyan">
+                                    <CalendarIcon size={18} />
+                                </div>
+                                <div>
+                                    <div className="text-sm text-dark-300">Available Tables</div>
+                                    <div className="font-medium text-white">{TABLE_COUNT} tables</div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white">
+                                    <span className="text-sm font-bold">A</span>
+                                </div>
+                                <div>
+                                    <div className="text-sm text-dark-300">Contact Us</div>
+                                    <div className="font-medium text-white">pdnprojectaura17@gmail.com</div>
+                                    <div className="text-sm text-dark-400">+94 760 609 159</div>
+                                </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-white/10 bg-dark-900 p-4 text-sm text-dark-300">
+                                Each reservation holds the table for {BOOKING_DURATION_HOURS} hours, for example {formatSlotLabel('19:00')}.
                             </div>
                         </div>
                     </div>
@@ -208,6 +334,9 @@ export default function ReservationPage() {
                                         className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan transition-all"
                                         placeholder="John Doe"
                                     />
+                                    {fieldErrors.customerName && (
+                                        <p className="text-xs text-red-400 mt-1">{fieldErrors.customerName}</p>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-dark-300 uppercase tracking-wider">Email Address</label>
@@ -217,6 +346,9 @@ export default function ReservationPage() {
                                         className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan transition-all"
                                         placeholder="john@example.com"
                                     />
+                                    {fieldErrors.email && (
+                                        <p className="text-xs text-red-400 mt-1">{fieldErrors.email}</p>
+                                    )}
                                 </div>
                             </div>
 
@@ -229,10 +361,28 @@ export default function ReservationPage() {
                                         className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan transition-all"
                                         placeholder="+94 77 123 4567"
                                     />
+                                    {fieldErrors.phone && (
+                                        <p className="text-xs text-red-400 mt-1">{fieldErrors.phone}</p>
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-dark-300 uppercase tracking-wider">Table Number</label>
+                                    <select
+                                        name="tableNumber" required
+                                        value={formData.tableNumber} onChange={handleInputChange}
+                                        className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan transition-all appearance-none"
+                                    >
+                                        {[...Array(TABLE_COUNT)].map((_, i) => (
+                                            <option key={i+1} value={String(i+1)}>{`Table ${i+1}`}</option>
+                                        ))}
+                                    </select>
+                                    {fieldErrors.tableNumber && (
+                                        <p className="text-xs text-red-400 mt-1">{fieldErrors.tableNumber}</p>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-dark-300 uppercase tracking-wider">Party Size</label>
-                                    <select 
+                                    <select
                                         name="partySize" required
                                         value={formData.partySize} onChange={handleInputChange}
                                         className="w-full bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan transition-all appearance-none"
@@ -241,8 +391,8 @@ export default function ReservationPage() {
                                             <option key={i+1} value={i+1}>{i+1} {i === 0 ? 'Guest' : 'Guests'}</option>
                                         ))}
                                     </select>
+                                    </div>
                                 </div>
-                            </div>
 
                             {/* Date Selection */}
                             <div className="space-y-2 pt-4 border-t border-white/5">
@@ -251,10 +401,14 @@ export default function ReservationPage() {
                                 </label>
                                 <input 
                                     type="date" required name="reservationDate"
-                                    min={new Date().toISOString().split('T')[0]}
+                                    min={minReservationDate}
+                                    max={maxReservationDate}
                                     value={formData.reservationDate} onChange={handleInputChange}
                                     className="w-full md:w-1/2 bg-dark-800 border border-dark-600 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan transition-all [color-scheme:dark]"
                                 />
+                                {fieldErrors.reservationTime && (
+                                    <p className="text-xs text-red-400 mt-1">{fieldErrors.reservationTime}</p>
+                                )}
                             </div>
 
                             {/* Time Slots Grid */}
@@ -266,23 +420,32 @@ export default function ReservationPage() {
                                 
                                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
                                     {slots.map((slot) => {
-                                        const isSelected = formData.timeSlot === slot.timeSlot;
+                                        const isSelected = formData.timeSlot === slot.time;
+                                        const tableLabel = slot.availableTables != null
+                                            ? `${slot.availableTables} table${slot.availableTables === 1 ? '' : 's'} free`
+                                            : '';
+                                        // If frontend requested a specific table, prefer that availability marker
+                                        const specificTableUnavailable = (slot.tableAvailable === false);
                                         return (
                                             <button
-                                                key={slot.timeSlot}
+                                                key={slot.time}
                                                 type="button"
-                                                disabled={!slot.available}
-                                                onClick={() => setFormData(prev => ({ ...prev, timeSlot: slot.timeSlot }))}
+                                                disabled={!slot.available || specificTableUnavailable}
+                                                onClick={() => setFormData(prev => ({ ...prev, timeSlot: slot.time }))}
                                                 className={`py-3 px-2 rounded-xl text-sm font-medium transition-all duration-200 border
-                                                    ${!slot.available 
-                                                        ? 'bg-dark-800 border-dark-700 text-dark-500 cursor-not-allowed line-through decoration-dark-500' 
+                                                    ${(!slot.available || specificTableUnavailable)
+                                                        ? 'bg-dark-800 border-dark-700 text-dark-500 cursor-not-allowed line-through decoration-dark-500'
                                                         : isSelected
                                                             ? 'bg-neon-blue/20 border-neon-blue text-neon-cyan shadow-[0_0_15px_rgba(76,110,245,0.2)]'
                                                             : 'bg-dark-800 border-dark-600 text-white hover:border-gold-500/50 hover:bg-gold-500/5'
                                                     }
                                                 `}
                                             >
-                                                {slot.timeSlot}
+                                                <div>{formatSlotLabel(slot.time)}</div>
+                                                {tableLabel && <div className="text-[10px] text-dark-300 mt-1">{tableLabel}</div>}
+                                                {slot.tableAvailable === false && (
+                                                    <div className="text-[10px] text-red-400 mt-1">Selected table is booked</div>
+                                                )}
                                             </button>
                                         );
                                     })}
@@ -296,7 +459,7 @@ export default function ReservationPage() {
                             <div className="pt-6">
                                 <button 
                                     type="submit"
-                                    disabled={isSubmitting || !formData.timeSlot}
+                                    disabled={isSubmitting || !formData.timeSlot || !formData.customerEmail || !formData.customerPhone}
                                     className="w-full btn-glow bg-neon-cyan text-dark-950 font-bold text-lg py-4 rounded-xl shadow-[0_0_20px_rgba(0,245,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                                 >
                                     {isSubmitting ? 'Confirming...' : 'Confirm Reservation'}
