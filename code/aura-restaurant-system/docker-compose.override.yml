@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  backend:
+    environment:
+      - DB_URL=jdbc:postgresql://postgres:5432/aura_db
+      - DB_USERNAME=aura_user
+      - DB_PASSWORD=aura_password
+      - PAYHERE_MERCHANT_ID=demo
+      - PAYHERE_MERCHANT_SECRET=demo
+      - PAYHERE_SANDBOX=true
+      - PAYHERE_APP_BASE_URL=http://localhost:8080

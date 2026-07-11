@@ -197,8 +197,13 @@ export default function RobotUI() {
     setPaymentLoading(true);
     setPaymentError('');
     try {
-      const sessionId = session?.walkInSessionId;
-      if (!sessionId) throw new Error('No active session for this table.');
+      let sessionId = session?.walkInSessionId;
+      if (!sessionId) {
+        // Try to create a walk-in session automatically for local/dev flows
+        const newSessionId = await startNewCustomerSession(session?.tableNumber);
+        if (!newSessionId) throw new Error('No active session for this table.');
+        sessionId = newSessionId;
+      }
 
       // Only this table's LATEST session's orders — never older/previous customers.
       const sessionOrders = await orderAPI.getOrdersBySession(sessionId);
