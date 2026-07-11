@@ -13,6 +13,9 @@ import com.aura.system.repositories.RestaurantTableRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +26,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.aura.exception.ReservationConflictException;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +37,16 @@ public class ReservationServiceImpl implements ReservationService {
 
     private final ReservationRepository    reservationRepository;
     private final RestaurantTableRepository tableRepository;
+    private final JavaMailSender             mailSender;
+
+    @Value("${aura.notifications.enabled:false}")
+    private boolean notificationsEnabled;
+
+    @Value("${aura.notifications.recipient:pdnprojectaura17@gmail.com}")
+    private String notificationRecipient;
+
+    @Value("${aura.notifications.sender:pdnprojectaura17@gmail.com}")
+    private String notificationSender;
 
     // A reservation blocks the table for 2 hours either side
     private static final int SLOT_HOURS = 2;
@@ -40,28 +56,49 @@ public class ReservationServiceImpl implements ReservationService {
     @Override
     @Transactional
     public ReservationResponse createReservation(CreateReservationRequest request) {
-
-        // 1. Find an available table that fits the party size
-        List<RestaurantTable> tables = tableRepository.findAll();
-        
+        // 1. If a specific table number was requested, try to reserve that table
         RestaurantTable assignedTable = null;
-        for (RestaurantTable table : tables) {
-            if (table.getCapacity() >= request.getPartySize()) {
-                LocalDateTime windowStart = request.getReservationTime().minusHours(SLOT_HOURS);
-                LocalDateTime windowEnd   = request.getReservationTime().plusHours(SLOT_HOURS);
-                
-                List<Reservation> conflicts = reservationRepository
-                        .findConflictingReservations(table.getTableId(), windowStart, windowEnd);
-                        
-                if (conflicts.isEmpty()) {
-                    assignedTable = table;
-                    break;
+        if (request.getTableNumber() != null) {
+            // always treat the incoming payload as numeric table number
+            String numericTableNumber = String.valueOf(request.getTableNumber()).trim();
+            RestaurantTable requested = tableRepository.findByTableNumber(numericTableNumber);
+            if (requested == null) {
+                throw new jakarta.persistence.EntityNotFoundException("Requested table not found: " + numericTableNumber);
+            }
+
+            LocalDateTime windowStart = request.getReservationTime().minusHours(SLOT_HOURS);
+            LocalDateTime windowEnd   = request.getReservationTime().plusHours(SLOT_HOURS);
+
+            List<Reservation> conflicts = reservationRepository
+                    .findConflictingReservations(requested.getTableId(), windowStart, windowEnd);
+
+            if (!conflicts.isEmpty()) {
+                throw new ReservationConflictException("Selected table " + request.getTableNumber() + " is not available for that time.");
+            }
+
+            // table is free — honour the request
+            assignedTable = requested;
+        } else {
+            // 2. Find an available table that fits the party size (auto-assign)
+            List<RestaurantTable> tables = tableRepository.findAll();
+            for (RestaurantTable table : tables) {
+                if (table.getCapacity() >= request.getPartySize()) {
+                    LocalDateTime windowStart = request.getReservationTime().minusHours(SLOT_HOURS);
+                    LocalDateTime windowEnd   = request.getReservationTime().plusHours(SLOT_HOURS);
+
+                    List<Reservation> conflicts = reservationRepository
+                            .findConflictingReservations(table.getTableId(), windowStart, windowEnd);
+
+                    if (conflicts.isEmpty()) {
+                        assignedTable = table;
+                        break;
+                    }
                 }
             }
-        }
 
-        if (assignedTable == null) {
-            throw new IllegalStateException("No available table found for that time and party size.");
+            if (assignedTable == null) {
+                throw new ReservationConflictException("No available table found for that time and party size.");
+            }
         }
 
         // 2. Save reservation
@@ -80,7 +117,20 @@ public class ReservationServiceImpl implements ReservationService {
                 saved.getReservationId(), assignedTable.getTableNumber(),
                 request.getReservationTime());
 
-        // TODO: Email sending logic here
+        if (notificationsEnabled) {
+            // Send emails after transaction commit so failures don't roll back reservation
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    try {
+                        sendReservationNotification(saved);
+                    } catch (Exception ex) {
+                        log.error("Failed to send notification after commit for reservation id={}", saved.getReservationId(), ex);
+                        // Do not rethrow — do not affect reservation outcome
+                    }
+                }
+            });
+        }
 
         return mapToResponse(saved);
     }
@@ -138,40 +188,105 @@ public class ReservationServiceImpl implements ReservationService {
     
     @Override
     @Transactional(readOnly = true)
-    public SlotAvailabilityResponse getAvailableSlots(String dateStr) {
+    public SlotAvailabilityResponse getAvailableSlots(String dateStr, Integer partySize, String tableNumber) {
         LocalDate date = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE);
         
         List<SlotAvailabilityResponse.SlotInfo> slots = new ArrayList<>();
-        List<RestaurantTable> allTables = tableRepository.findAll();
-        
-        // Define restaurant hours (e.g. 17:00 to 22:00)
-        for (int hour = 17; hour <= 22; hour++) {
+        // Define restaurant hours: 11:00 to 21:00 start times for 2-hour bookings (closing at 23:00)
+        List<RestaurantTable> allTables = partySize == null
+                ? tableRepository.findAll()
+                : tableRepository.findByCapacityGreaterThanEqual(partySize);
+
+        RestaurantTable specificTable = null;
+        if (tableNumber != null && !tableNumber.isBlank()) {
+            // Force numeric table number matching for seeded values like "1".."10"
+            String numericTableNumber = tableNumber.trim();
+            specificTable = tableRepository.findByTableNumber(numericTableNumber);
+        }
+
+        for (int hour = 11; hour <= 21; hour++) {
             LocalDateTime slotTime = LocalDateTime.of(date, LocalTime.of(hour, 0));
-            
-            boolean anyTableAvailable = false;
-            for (RestaurantTable table : allTables) {
+
+            if (specificTable != null) {
+                // Strict per-table check: only query reservations for this table
                 LocalDateTime windowStart = slotTime.minusHours(SLOT_HOURS);
                 LocalDateTime windowEnd   = slotTime.plusHours(SLOT_HOURS);
-                
                 List<Reservation> conflicts = reservationRepository
-                        .findConflictingReservations(table.getTableId(), windowStart, windowEnd);
-                        
-                if (conflicts.isEmpty()) {
-                    anyTableAvailable = true;
-                    break;
+                        .findConflictingReservations(specificTable.getTableId(), windowStart, windowEnd);
+                boolean tableIsFree = conflicts.isEmpty();
+                slots.add(SlotAvailabilityResponse.SlotInfo.builder()
+                        .time(String.format("%02d:00", hour))
+                        .available(tableIsFree)
+                        .availableTables(tableIsFree ? 1 : 0)
+                        .tableAvailable(tableIsFree)
+                        .build());
+            } else {
+                int availableCount = 0;
+                for (RestaurantTable table : allTables) {
+                    LocalDateTime windowStart = slotTime.minusHours(SLOT_HOURS);
+                    LocalDateTime windowEnd   = slotTime.plusHours(SLOT_HOURS);
+
+                    List<Reservation> conflicts = reservationRepository
+                            .findConflictingReservations(table.getTableId(), windowStart, windowEnd);
+
+                    if (conflicts.isEmpty()) {
+                        availableCount++;
+                    }
                 }
+                slots.add(SlotAvailabilityResponse.SlotInfo.builder()
+                        .time(String.format("%02d:00", hour))
+                        .available(availableCount > 0)
+                        .availableTables(availableCount)
+                        .tableAvailable(null)
+                        .build());
             }
-            
-            slots.add(SlotAvailabilityResponse.SlotInfo.builder()
-                    .time(String.format("%02d:00", hour))
-                    .available(anyTableAvailable)
-                    .build());
         }
         
         return SlotAvailabilityResponse.builder()
                 .date(dateStr)
                 .slots(slots)
                 .build();
+    }
+
+    private void sendReservationNotification(Reservation reservation) {
+        try {
+            // Admin notification to multiple addresses
+            SimpleMailMessage adminMsg = new SimpleMailMessage();
+            adminMsg.setFrom(notificationSender);
+            adminMsg.setTo(new String[]{"pdnprojectaura17@gmail.com", "kaveeshamadhushan1776@gmail.com"});
+            adminMsg.setSubject("New AURA Reservation: " + reservation.getCustomerName());
+            adminMsg.setText(
+                "New reservation details:\n\n" +
+                "Customer Name: " + reservation.getCustomerName() + "\n" +
+                "Customer Email: " + reservation.getEmail() + "\n" +
+                "Customer Phone: " + reservation.getPhone() + "\n" +
+                "Selected Table: " + reservation.getTable().getTableNumber() + "\n" +
+                "Reservation Time: " + reservation.getReservationTime() + "\n" +
+                "Party Size: " + reservation.getPartySize() + "\n" +
+                "Status: " + reservation.getStatus()
+            );
+            mailSender.send(adminMsg);
+            log.info("Admin reservation notification emails sent");
+
+            // Customer confirmation email
+            SimpleMailMessage customerMsg = new SimpleMailMessage();
+            customerMsg.setFrom(notificationSender);
+            customerMsg.setTo(reservation.getEmail());
+            customerMsg.setSubject("Your AURA reservation is confirmed");
+            customerMsg.setText(
+                "Hi " + reservation.getCustomerName() + ",\n\n" +
+                "Your table has been reserved successfully. Here are the details:\n" +
+                "Table: " + reservation.getTable().getTableNumber() + "\n" +
+                "Date & Time: " + reservation.getReservationTime() + "\n" +
+                "Party Size: " + reservation.getPartySize() + "\n\n" +
+                "If you need to cancel or modify your reservation, please contact us at pdnprojectaura17@gmail.com.\n\n" +
+                "Thank you,\nAURA Team"
+            );
+            mailSender.send(customerMsg);
+            log.info("Customer confirmation email sent to {}", reservation.getEmail());
+        } catch (Exception ex) {
+            log.error("Failed to send reservation notification email", ex);
+        }
     }
     
     // ── Check Slot Availability ──────────────────────────────────────────────

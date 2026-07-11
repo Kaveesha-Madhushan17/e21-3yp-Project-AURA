@@ -245,7 +245,7 @@ export default function LandingPage() {
                             <AnimatePresence>
                                 {filteredMenu.slice(0, 6).map((item) => (
                                     <motion.div
-                                        key={item.id}
+                                        key={item.menuItemId ?? item.id ?? item.name}
                                         layout
                                         initial={{ opacity: 0, scale: 0.9 }}
                                         animate={{ opacity: 1, scale: 1 }}

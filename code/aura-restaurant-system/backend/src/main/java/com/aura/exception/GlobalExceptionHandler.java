@@ -46,6 +46,11 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    @ExceptionHandler(com.aura.exception.ReservationConflictException.class)
+    public ResponseEntity<ErrorResponse> handleReservationConflict(com.aura.exception.ReservationConflictException ex) {
+        return error(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     // ─── Validation Errors ────────────────────────────────────────────────────
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -66,12 +71,17 @@ public class GlobalExceptionHandler {
     }
 
     // ─── Generic Fallback ─────────────────────────────────────────────────────
-
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
         // Log full stack trace for unexpected errors, but never expose it to client
         log.error("Unexpected error: {}", ex.getMessage(), ex);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
+    }
+
+    @ExceptionHandler(jakarta.persistence.EntityNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNotFound(jakarta.persistence.EntityNotFoundException ex) {
+        log.warn("Entity not found: {}", ex.getMessage());
+        return error(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
     // ─── Helper ──────────────────────────────────────────────────────────────

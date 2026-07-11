@@ -53,8 +53,10 @@ public class ReservationController {
     @Operation(summary = "Get available slots for a date",
                description = "Returns all available time slots for the given date")
     public ResponseEntity<com.aura.system.dtos.response.SlotAvailabilityResponse> getAvailableSlots(
-            @RequestParam String date) {
-        return ResponseEntity.ok(reservationService.getAvailableSlots(date));
+            @RequestParam String date,
+            @RequestParam(required = false) Integer partySize,
+            @RequestParam(required = false) String tableNumber) {
+        return ResponseEntity.ok(reservationService.getAvailableSlots(date, partySize, tableNumber));
     }
 
     @GetMapping("/check")
@@ -77,6 +79,25 @@ public class ReservationController {
             LocalDateTime time) {
         return ResponseEntity.ok(
                 reservationService.checkTableAvailability(tableId, time));
+    }
+
+        // Table-specific slots availability: /api/reservations/availability?date=YYYY-MM-DD&tableNumber=2
+        @GetMapping(value = "/availability", params = {"date", "tableNumber"})
+        @Operation(summary = "Get slot availability for a specific table",
+               description = "Returns slot availability for the given date filtered by the requested table number")
+        public ResponseEntity<com.aura.system.dtos.response.SlotAvailabilityResponse> getAvailabilityForTable(
+            @RequestParam String date,
+            @RequestParam String tableNumber) {
+        return ResponseEntity.ok(reservationService.getAvailableSlots(date, null, tableNumber));
+        }
+
+    @GetMapping("/availability/slots")
+    @Operation(summary = "Get slot availability for a specific table",
+               description = "Returns slot availability for the given date filtered by the requested table number")
+    public ResponseEntity<com.aura.system.dtos.response.SlotAvailabilityResponse> getSlotsForTable(
+            @RequestParam String date,
+            @RequestParam String tableNumber) {
+        return ResponseEntity.ok(reservationService.getAvailableSlots(date, null, tableNumber));
     }
 
     @PatchMapping("/{id}/cancel")
