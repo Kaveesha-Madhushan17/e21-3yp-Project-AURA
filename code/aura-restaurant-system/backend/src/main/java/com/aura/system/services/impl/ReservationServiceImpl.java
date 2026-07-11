@@ -58,13 +58,12 @@ public class ReservationServiceImpl implements ReservationService {
     public ReservationResponse createReservation(CreateReservationRequest request) {
         // 1. If a specific table number was requested, try to reserve that table
         RestaurantTable assignedTable = null;
-        if (request.getTableNumber() != null && !request.getTableNumber().isBlank()) {
-            // resilient lookup similar to availability lookup
-            RestaurantTable requested = tableRepository.findByTableNumber(request.getTableNumber());
-            if (requested == null) requested = tableRepository.findByTableNumber("Table " + request.getTableNumber());
-            if (requested == null) requested = tableRepository.findByTableNumber(String.valueOf(request.getTableNumber()));
+        if (request.getTableNumber() != null) {
+            // always treat the incoming payload as numeric table number
+            String numericTableNumber = String.valueOf(request.getTableNumber()).trim();
+            RestaurantTable requested = tableRepository.findByTableNumber(numericTableNumber);
             if (requested == null) {
-                throw new jakarta.persistence.EntityNotFoundException("Requested table not found: " + request.getTableNumber());
+                throw new jakarta.persistence.EntityNotFoundException("Requested table not found: " + numericTableNumber);
             }
 
             LocalDateTime windowStart = request.getReservationTime().minusHours(SLOT_HOURS);
@@ -193,54 +192,54 @@ public class ReservationServiceImpl implements ReservationService {
         LocalDate date = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE);
         
         List<SlotAvailabilityResponse.SlotInfo> slots = new ArrayList<>();
+        // Define restaurant hours: 11:00 to 21:00 start times for 2-hour bookings (closing at 23:00)
         List<RestaurantTable> allTables = partySize == null
-            ? tableRepository.findAll()
-            : tableRepository.findByCapacityGreaterThanEqual(partySize);
+                ? tableRepository.findAll()
+                : tableRepository.findByCapacityGreaterThanEqual(partySize);
 
         RestaurantTable specificTable = null;
         if (tableNumber != null && !tableNumber.isBlank()) {
-            // Try several lookup strategies to be resilient to stored formats
-            specificTable = tableRepository.findByTableNumber(tableNumber);
-            if (specificTable == null) {
-                // maybe stored as 'Table 3'
-                specificTable = tableRepository.findByTableNumber("Table " + tableNumber);
-            }
-            if (specificTable == null) {
-                // maybe numeric stored without prefix
-                specificTable = tableRepository.findByTableNumber(String.valueOf(tableNumber));
-            }
+            // Force numeric table number matching for seeded values like "1".."10"
+            String numericTableNumber = tableNumber.trim();
+            specificTable = tableRepository.findByTableNumber(numericTableNumber);
         }
-        
-        // Define restaurant hours: 11:00 to 21:00 start times for 2-hour bookings (closing at 23:00)
+
         for (int hour = 11; hour <= 21; hour++) {
             LocalDateTime slotTime = LocalDateTime.of(date, LocalTime.of(hour, 0));
-            
-            int availableCount = 0;
-            Boolean tableAvailable = null;
-            for (RestaurantTable table : allTables) {
+
+            if (specificTable != null) {
+                // Strict per-table check: only query reservations for this table
                 LocalDateTime windowStart = slotTime.minusHours(SLOT_HOURS);
                 LocalDateTime windowEnd   = slotTime.plusHours(SLOT_HOURS);
-                
                 List<Reservation> conflicts = reservationRepository
-                        .findConflictingReservations(table.getTableId(), windowStart, windowEnd);
-                        
-                if (conflicts.isEmpty()) {
-                    availableCount++;
-                }
-                // If a specific table was requested, check its conflicts
-                if (specificTable != null && specificTable.getTableId().equals(table.getTableId())) {
-                    tableAvailable = conflicts.isEmpty();
-                }
-            }
-            
-            boolean slotAvailable = (specificTable != null) ? Boolean.TRUE.equals(tableAvailable) : (availableCount > 0);
+                        .findConflictingReservations(specificTable.getTableId(), windowStart, windowEnd);
+                boolean tableIsFree = conflicts.isEmpty();
+                slots.add(SlotAvailabilityResponse.SlotInfo.builder()
+                        .time(String.format("%02d:00", hour))
+                        .available(tableIsFree)
+                        .availableTables(tableIsFree ? 1 : 0)
+                        .tableAvailable(tableIsFree)
+                        .build());
+            } else {
+                int availableCount = 0;
+                for (RestaurantTable table : allTables) {
+                    LocalDateTime windowStart = slotTime.minusHours(SLOT_HOURS);
+                    LocalDateTime windowEnd   = slotTime.plusHours(SLOT_HOURS);
 
-            slots.add(SlotAvailabilityResponse.SlotInfo.builder()
-                    .time(String.format("%02d:00", hour))
-                    .available(slotAvailable)
-                    .availableTables(availableCount)
-                    .tableAvailable(tableAvailable)
-                    .build());
+                    List<Reservation> conflicts = reservationRepository
+                            .findConflictingReservations(table.getTableId(), windowStart, windowEnd);
+
+                    if (conflicts.isEmpty()) {
+                        availableCount++;
+                    }
+                }
+                slots.add(SlotAvailabilityResponse.SlotInfo.builder()
+                        .time(String.format("%02d:00", hour))
+                        .available(availableCount > 0)
+                        .availableTables(availableCount)
+                        .tableAvailable(null)
+                        .build());
+            }
         }
         
         return SlotAvailabilityResponse.builder()

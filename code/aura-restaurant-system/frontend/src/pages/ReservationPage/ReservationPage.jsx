@@ -151,7 +151,7 @@ export default function ReservationPage() {
                 email: formData.customerEmail,
                 phone: formData.customerPhone,
                 partySize: Number(formData.partySize),
-                tableNumber: formData.tableNumber,
+                tableNumber: Number(formData.tableNumber),
                 reservationTime,
             };
 

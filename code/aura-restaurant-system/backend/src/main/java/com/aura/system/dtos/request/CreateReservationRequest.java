@@ -21,8 +21,9 @@ public class CreateReservationRequest {
     @Min(value = 1, message = "Party size must be at least 1")
     private Integer partySize;
 
-    @NotBlank(message = "Table number is required")
-    private String tableNumber;
+    @NotNull(message = "Table number is required")
+    @Min(value = 1, message = "Table number must be a valid number")
+    private Integer tableNumber;
 
     @NotNull(message = "Reservation time is required")
     @Future(message = "Reservation time must be in the future")
