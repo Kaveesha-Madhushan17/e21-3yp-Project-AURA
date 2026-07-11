@@ -386,7 +386,8 @@ const startNewCustomerSession = useCallback(async (tableNumber, currentOrderIds 
       };
     });
 
-    return true;
+    // Return the new sessionId so callers can continue immediately
+    return sessionId;
   } catch (err) {
     console.error('[AURA] Failed to create new customer session:', err);
     return false;
