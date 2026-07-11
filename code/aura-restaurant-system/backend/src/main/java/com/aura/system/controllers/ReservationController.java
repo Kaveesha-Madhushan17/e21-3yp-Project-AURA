@@ -49,6 +49,23 @@ public class ReservationController {
         return ResponseEntity.ok(reservationService.getReservationById(id));
     }
 
+    @GetMapping("/available")
+    @Operation(summary = "Get available slots for a date",
+               description = "Returns all available time slots for the given date")
+    public ResponseEntity<com.aura.system.dtos.response.SlotAvailabilityResponse> getAvailableSlots(
+            @RequestParam String date) {
+        return ResponseEntity.ok(reservationService.getAvailableSlots(date));
+    }
+
+    @GetMapping("/check")
+    @Operation(summary = "Check availability for a slot",
+               description = "Checks if a table is free for the given date and time")
+    public ResponseEntity<com.aura.system.dtos.response.AvailabilityCheckResponse> checkSlotAvailability(
+            @RequestParam String date,
+            @RequestParam String timeSlot) {
+        return ResponseEntity.ok(reservationService.checkSlotAvailability(date, timeSlot));
+    }
+
     @GetMapping("/availability")
     @Operation(summary = "Check table availability",
                description = "Checks if a table is free within 2 hours of the given time")

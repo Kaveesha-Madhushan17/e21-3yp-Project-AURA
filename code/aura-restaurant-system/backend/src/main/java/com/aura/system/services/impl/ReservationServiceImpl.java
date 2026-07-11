@@ -3,6 +3,8 @@ package com.aura.system.services.impl;
 import com.aura.system.dtos.request.CreateReservationRequest;
 import com.aura.system.dtos.response.ReservationResponse;
 import com.aura.system.dtos.response.TableAvailabilityResponse;
+import com.aura.system.dtos.response.SlotAvailabilityResponse;
+import com.aura.system.dtos.response.AvailabilityCheckResponse;
 import com.aura.system.entities.Reservation;
 import com.aura.system.entities.RestaurantTable;
 import com.aura.system.services.ReservationService;
@@ -14,7 +16,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -35,38 +41,35 @@ public class ReservationServiceImpl implements ReservationService {
     @Transactional
     public ReservationResponse createReservation(CreateReservationRequest request) {
 
-        // 1. Validate table exists
-        RestaurantTable table = tableRepository.findById(request.getTableId())
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Table not found: " + request.getTableId()));
-
-        // 2. Check party size fits the table
-        if (request.getPartySize() > table.getCapacity()) {
-            throw new IllegalArgumentException(
-                    "Party size " + request.getPartySize() +
-                    " exceeds table capacity of " + table.getCapacity());
+        // 1. Find an available table that fits the party size
+        List<RestaurantTable> tables = tableRepository.findAll();
+        
+        RestaurantTable assignedTable = null;
+        for (RestaurantTable table : tables) {
+            if (table.getCapacity() >= request.getPartySize()) {
+                LocalDateTime windowStart = request.getReservationTime().minusHours(SLOT_HOURS);
+                LocalDateTime windowEnd   = request.getReservationTime().plusHours(SLOT_HOURS);
+                
+                List<Reservation> conflicts = reservationRepository
+                        .findConflictingReservations(table.getTableId(), windowStart, windowEnd);
+                        
+                if (conflicts.isEmpty()) {
+                    assignedTable = table;
+                    break;
+                }
+            }
         }
 
-        // 3. Check no conflicting reservation exists
-        LocalDateTime windowStart = request.getReservationTime()
-                .minusHours(SLOT_HOURS);
-        LocalDateTime windowEnd   = request.getReservationTime()
-                .plusHours(SLOT_HOURS);
-
-        List<Reservation> conflicts = reservationRepository
-                .findConflictingReservations(
-                        request.getTableId(), windowStart, windowEnd);
-
-        if (!conflicts.isEmpty()) {
-            throw new IllegalStateException(
-                    "Table " + table.getTableNumber() +
-                    " is already reserved at that time.");
+        if (assignedTable == null) {
+            throw new IllegalStateException("No available table found for that time and party size.");
         }
 
-        // 4. Save reservation
+        // 2. Save reservation
         Reservation reservation = Reservation.builder()
-                .table(table)
+                .table(assignedTable)
                 .customerName(request.getCustomerName())
+                .email(request.getEmail())
+                .phone(request.getPhone())
                 .partySize(request.getPartySize())
                 .reservationTime(request.getReservationTime())
                 .status("CONFIRMED")
@@ -74,8 +77,10 @@ public class ReservationServiceImpl implements ReservationService {
 
         Reservation saved = reservationRepository.save(reservation);
         log.info("Reservation created | id={} | table={} | time={}",
-                saved.getReservationId(), table.getTableNumber(),
+                saved.getReservationId(), assignedTable.getTableNumber(),
                 request.getReservationTime());
+
+        // TODO: Email sending logic here
 
         return mapToResponse(saved);
     }
@@ -128,6 +133,75 @@ public class ReservationServiceImpl implements ReservationService {
                         "Already reserved between " + windowStart + " and " + windowEnd)
                 .build();
     }
+    
+    // ── Get Available Slots ──────────────────────────────────────────────────
+    
+    @Override
+    @Transactional(readOnly = true)
+    public SlotAvailabilityResponse getAvailableSlots(String dateStr) {
+        LocalDate date = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE);
+        
+        List<SlotAvailabilityResponse.SlotInfo> slots = new ArrayList<>();
+        List<RestaurantTable> allTables = tableRepository.findAll();
+        
+        // Define restaurant hours (e.g. 17:00 to 22:00)
+        for (int hour = 17; hour <= 22; hour++) {
+            LocalDateTime slotTime = LocalDateTime.of(date, LocalTime.of(hour, 0));
+            
+            boolean anyTableAvailable = false;
+            for (RestaurantTable table : allTables) {
+                LocalDateTime windowStart = slotTime.minusHours(SLOT_HOURS);
+                LocalDateTime windowEnd   = slotTime.plusHours(SLOT_HOURS);
+                
+                List<Reservation> conflicts = reservationRepository
+                        .findConflictingReservations(table.getTableId(), windowStart, windowEnd);
+                        
+                if (conflicts.isEmpty()) {
+                    anyTableAvailable = true;
+                    break;
+                }
+            }
+            
+            slots.add(SlotAvailabilityResponse.SlotInfo.builder()
+                    .time(String.format("%02d:00", hour))
+                    .available(anyTableAvailable)
+                    .build());
+        }
+        
+        return SlotAvailabilityResponse.builder()
+                .date(dateStr)
+                .slots(slots)
+                .build();
+    }
+    
+    // ── Check Slot Availability ──────────────────────────────────────────────
+    
+    @Override
+    @Transactional(readOnly = true)
+    public AvailabilityCheckResponse checkSlotAvailability(String date, String timeSlot) {
+        LocalDateTime time = LocalDateTime.parse(date + "T" + timeSlot + ":00", DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        
+        List<RestaurantTable> allTables = tableRepository.findAll();
+        boolean anyAvailable = false;
+        
+        for (RestaurantTable table : allTables) {
+            LocalDateTime windowStart = time.minusHours(SLOT_HOURS);
+            LocalDateTime windowEnd   = time.plusHours(SLOT_HOURS);
+            
+            List<Reservation> conflicts = reservationRepository
+                    .findConflictingReservations(table.getTableId(), windowStart, windowEnd);
+                    
+            if (conflicts.isEmpty()) {
+                anyAvailable = true;
+                break;
+            }
+        }
+        
+        return AvailabilityCheckResponse.builder()
+                .available(anyAvailable)
+                .message(anyAvailable ? "Table is available" : "No tables available at this time")
+                .build();
+    }
 
     // ── Cancel Reservation ───────────────────────────────────────────────────
 
@@ -163,6 +237,8 @@ public class ReservationServiceImpl implements ReservationService {
                 .tableNumber(r.getTable().getTableNumber())
                 .tableCapacity(r.getTable().getCapacity())
                 .customerName(r.getCustomerName())
+                .email(r.getEmail())
+                .phone(r.getPhone())
                 .partySize(r.getPartySize())
                 .reservationTime(r.getReservationTime())
                 .status(r.getStatus())

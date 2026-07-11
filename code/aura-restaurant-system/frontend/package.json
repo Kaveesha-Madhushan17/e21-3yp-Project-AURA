@@ -11,6 +11,7 @@
     "dependencies": {
         "@stomp/stompjs": "^7.0.0",
         "axios": "^1.7.9",
+        "framer-motion": "^11.2.10",
         "lucide-react": "^0.460.0",
         "mqtt": "^5.15.1",
         "react": "^18.3.1",

@@ -126,7 +126,9 @@ export function MusicPlayerProvider({ children }) {
     <MusicPlayerContext.Provider value={value}>
       {children}
       {/* Hidden YT player target — stays mounted across all table-role pages */}
-      <div ref={holderRef} style={{ display: "none" }} />
+      <div style={{ display: "none" }}>
+        <div ref={holderRef} />
+      </div>
     </MusicPlayerContext.Provider>
   );
 }

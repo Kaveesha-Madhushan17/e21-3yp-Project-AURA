@@ -27,6 +27,12 @@ public class Reservation {
     @Column(name = "party_size", nullable = false)
     private Integer partySize;
 
+    @Column(name = "email")
+    private String email;
+
+    @Column(name = "phone")
+    private String phone;
+
     @Column(name = "reservation_time", nullable = false)
     private LocalDateTime reservationTime;
 
