@@ -20,7 +20,7 @@ export const reservationAPI = {
       if (partySize != null) params.partySize = partySize;
       if (tableNumber) params.tableNumber = tableNumber;
 
-      const url = tableNumber ? '/reservations/availability' : '/reservations/available';
+      const url = '/reservations/available';
       const response = await axiosInstance.get(url, {
         params,
       });
