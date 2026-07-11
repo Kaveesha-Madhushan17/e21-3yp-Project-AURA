@@ -13,9 +13,6 @@ import com.aura.system.repositories.RestaurantTableRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,8 +24,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import com.aura.exception.ReservationConflictException;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 @RequiredArgsConstructor
@@ -37,16 +32,6 @@ public class ReservationServiceImpl implements ReservationService {
 
     private final ReservationRepository    reservationRepository;
     private final RestaurantTableRepository tableRepository;
-    private final JavaMailSender             mailSender;
-
-    @Value("${aura.notifications.enabled:false}")
-    private boolean notificationsEnabled;
-
-    @Value("${aura.notifications.recipient:pdnprojectaura17@gmail.com}")
-    private String notificationRecipient;
-
-    @Value("${aura.notifications.sender:pdnprojectaura17@gmail.com}")
-    private String notificationSender;
 
     // A reservation blocks the table for 2 hours either side
     private static final int SLOT_HOURS = 2;
@@ -116,21 +101,6 @@ public class ReservationServiceImpl implements ReservationService {
         log.info("Reservation created | id={} | table={} | time={}",
                 saved.getReservationId(), assignedTable.getTableNumber(),
                 request.getReservationTime());
-
-        if (notificationsEnabled) {
-            // Send emails after transaction commit so failures don't roll back reservation
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    try {
-                        sendReservationNotification(saved);
-                    } catch (Exception ex) {
-                        log.error("Failed to send notification after commit for reservation id={}", saved.getReservationId(), ex);
-                        // Do not rethrow — do not affect reservation outcome
-                    }
-                }
-            });
-        }
 
         return mapToResponse(saved);
     }
@@ -246,47 +216,6 @@ public class ReservationServiceImpl implements ReservationService {
                 .date(dateStr)
                 .slots(slots)
                 .build();
-    }
-
-    private void sendReservationNotification(Reservation reservation) {
-        try {
-            // Admin notification to multiple addresses
-            SimpleMailMessage adminMsg = new SimpleMailMessage();
-            adminMsg.setFrom(notificationSender);
-            adminMsg.setTo(new String[]{"pdnprojectaura17@gmail.com", "kaveeshamadhushan1776@gmail.com"});
-            adminMsg.setSubject("New AURA Reservation: " + reservation.getCustomerName());
-            adminMsg.setText(
-                "New reservation details:\n\n" +
-                "Customer Name: " + reservation.getCustomerName() + "\n" +
-                "Customer Email: " + reservation.getEmail() + "\n" +
-                "Customer Phone: " + reservation.getPhone() + "\n" +
-                "Selected Table: " + reservation.getTable().getTableNumber() + "\n" +
-                "Reservation Time: " + reservation.getReservationTime() + "\n" +
-                "Party Size: " + reservation.getPartySize() + "\n" +
-                "Status: " + reservation.getStatus()
-            );
-            mailSender.send(adminMsg);
-            log.info("Admin reservation notification emails sent");
-
-            // Customer confirmation email
-            SimpleMailMessage customerMsg = new SimpleMailMessage();
-            customerMsg.setFrom(notificationSender);
-            customerMsg.setTo(reservation.getEmail());
-            customerMsg.setSubject("Your AURA reservation is confirmed");
-            customerMsg.setText(
-                "Hi " + reservation.getCustomerName() + ",\n\n" +
-                "Your table has been reserved successfully. Here are the details:\n" +
-                "Table: " + reservation.getTable().getTableNumber() + "\n" +
-                "Date & Time: " + reservation.getReservationTime() + "\n" +
-                "Party Size: " + reservation.getPartySize() + "\n\n" +
-                "If you need to cancel or modify your reservation, please contact us at pdnprojectaura17@gmail.com.\n\n" +
-                "Thank you,\nAURA Team"
-            );
-            mailSender.send(customerMsg);
-            log.info("Customer confirmation email sent to {}", reservation.getEmail());
-        } catch (Exception ex) {
-            log.error("Failed to send reservation notification email", ex);
-        }
     }
     
     // ── Check Slot Availability ──────────────────────────────────────────────

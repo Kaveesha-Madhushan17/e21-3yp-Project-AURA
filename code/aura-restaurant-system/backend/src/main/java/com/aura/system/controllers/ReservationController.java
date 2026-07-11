@@ -4,6 +4,7 @@ import com.aura.system.dtos.request.CreateReservationRequest;
 import com.aura.system.dtos.response.ReservationResponse;
 import com.aura.system.dtos.response.TableAvailabilityResponse;
 import com.aura.system.services.ReservationService;
+import com.aura.system.services.EmailService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,15 +25,18 @@ import java.util.List;
 public class ReservationController {
 
     private final ReservationService reservationService;
+    private final EmailService emailService;
 
     @PostMapping
     @Operation(summary = "Create a reservation",
                description = "Books a table for a customer at a specific time")
     public ResponseEntity<ReservationResponse> createReservation(
             @Valid @RequestBody CreateReservationRequest request) {
+        ReservationResponse response = reservationService.createReservation(request);
+        emailService.sendReservationConfirmation(response);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(reservationService.createReservation(request));
+                .body(response);
     }
 
     @GetMapping
