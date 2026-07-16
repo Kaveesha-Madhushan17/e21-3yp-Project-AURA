@@ -1,6 +1,7 @@
-
+**/.env
 # Mosquitto runtime DB
 code/aura-restaurant-system/mosquitto/data/mosquitto.db
 
 # Mosquitto runtime DB
 code/aura-restaurant-system/mosquitto/data/mosquitto.db
+e21-3yp-Project-AURA/code/aura-restaurant-system/backend/src/main/resources/application.yml

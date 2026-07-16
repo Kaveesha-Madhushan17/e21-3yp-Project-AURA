@@ -1,3 +1,4 @@
+**/.env
 
 # Mosquitto runtime DB
 code/aura-restaurant-system/mosquitto/data/mosquitto.db
