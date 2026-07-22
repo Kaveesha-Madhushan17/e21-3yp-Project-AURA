@@ -45,6 +45,7 @@ public class SecurityConfig {
             "/api/admin/**",
             "/api/robots/**",
             "/api/ratings/**",
+            "/api/feedback/**",
             "/api/walk-in-sessions/**",
             "/api/waiter/**",
             "/api/payments/payhere/**",
