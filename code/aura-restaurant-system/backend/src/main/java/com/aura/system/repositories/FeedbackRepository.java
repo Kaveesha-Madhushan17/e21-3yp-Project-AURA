@@ -25,4 +25,8 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Integer> {
     // Custom query — find recent negative feedback (rating <= 2)
     @Query("SELECT f FROM Feedback f WHERE f.rating <= 2 ORDER BY f.feedbackTime DESC")
     List<Feedback> findRecentNegativeFeedback();
+
+    // Average rating across ALL feedback (for admin dashboard)
+    @Query("SELECT AVG(f.rating) FROM Feedback f")
+    Double findOverallAverageRating();
 }
