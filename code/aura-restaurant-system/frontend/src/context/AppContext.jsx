@@ -236,6 +236,7 @@ const AppContext = createContext(null);
 export function AppProvider({ children }) {
   // ── Auth state ──
   const [session, setSession]       = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [loginError, setLoginError] = useState('');
 
   // ── Menu state ── (shared: RobotUI reads, AdminDashboard reads + writes)
@@ -270,6 +271,7 @@ export function AppProvider({ children }) {
         setSession(JSON.parse(storedUser));
       } catch {}
     }
+    setSessionLoading(false);
     loadMenu();
   }, []);
 
@@ -501,7 +503,7 @@ const getHiddenOrderIds = useCallback((tableNumber) => {
   }, []);
 
   const value = {
-    session, loginError,
+    session, sessionLoading, loginError,
     login, logout, verifyCredentials,
     theme, toggleTheme,
     menuItems, addMenuItem, updateMenuItem, deleteMenuItem, refreshMenu,
