@@ -24,11 +24,14 @@ import ReservationPage from './pages/ReservationPage/ReservationPage';
 
 // ── Protected route shell ─────────────────────────────────────────────────────
 function AppShell() {
-  const { session } = useAppContext();
+  const { session, sessionLoading } = useAppContext();
   const isAdmin = session?.role === 'admin';
   const isKitchen = session?.role === 'kitchen';
 
-  // Not authenticated → always show Login
+  // Still checking localStorage for an existing session â€” don't flash the login page
+  if (sessionLoading) return null;
+
+  // Not authenticated â†’ always show Login
   if (!session) return <LoginPage />;
 
   // // ── TABLE ROLE (Full screen, no navbar) ──

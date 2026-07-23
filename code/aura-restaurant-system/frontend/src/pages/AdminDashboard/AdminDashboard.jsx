@@ -14,7 +14,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, UtensilsCrossed, DollarSign, ShoppingBag,
   Bot, ArrowUpRight, ArrowDownRight, Plus,
-  Trash2, Activity, LogOut, Save, Pencil,
+  Trash2, Activity, LogOut, Save, Pencil, Star,
 } from 'lucide-react';
 import Card from '../../components/common/Card';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -25,6 +25,7 @@ import { useAppContext } from '../../context/AppContext';
 import { useRestaurant } from '../../context/RestaurantContext';
 import { AVAILABLE_MENU_IMAGES, getMenuImageSrc, isKnownMenuImage } from '../../utils/menuImages';
 import { orderMqtt } from '../../api/mqttclient';
+import feedbackAPI from '../../api/feedbackAPI';
 
 // ── Mock robot fleet data ─────────────────────────────────────────────────────
 // [BACKEND INTEGRATION: TODO] - GET /api/robots/status
@@ -73,6 +74,8 @@ export default function AdminDashboard() {
     robotsTotal: ROBOTS_DATA.length,
   });
   const [robotFleet, setRobotFleet] = useState(ROBOTS_DATA);
+  const [feedbackSummary, setFeedbackSummary] = useState({ averageRating: 0, totalCount: 0 });
+  const [recentFeedback, setRecentFeedback] = useState([]);
 
   // Subscribe to menu updates and real-time stats from MQTT
   useEffect(() => {
@@ -141,6 +144,20 @@ export default function AdminDashboard() {
   const unpaidOrderCount = orderHistory.filter((o) => !o.isPaid).length;
   const activeOrderCount = realtimeStats.activeOrderCount || unpaidOrderCount;
 
+useEffect(() => {
+    const loadFeedback = async () => {
+      try {
+        const summary = await feedbackAPI.getSummary();
+        setFeedbackSummary(summary);
+        const all = await feedbackAPI.getAll();
+        setRecentFeedback(all.slice(0, 6));
+      } catch (err) {
+        console.error('Failed to load feedback:', err);
+      }
+    };
+    loadFeedback();
+  }, []);
+  
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'menu'
 
   // ── Image mode: 'preset' = predefined images, 'upload' = upload new ────────
@@ -184,6 +201,11 @@ export default function AdminDashboard() {
       label: 'Robots Active',
       value: `${realtimeStats.robotsOnline}/${realtimeStats.robotsTotal}`,
       change: 'Online', up: true, icon: Bot, color: 'from-amber-500 to-yellow-400',
+    },
+    {
+      label: 'Avg. Customer Rating',
+      value: `${feedbackSummary.averageRating.toFixed(1)} ★`,
+      change: `${feedbackSummary.totalCount} reviews`, up: true, icon: Star, color: 'from-yellow-500 to-amber-400',
     },
   ];
 
@@ -473,7 +495,38 @@ const handleAddItem = async (e) => {
                   </Card>
                 </div>
               </div>
-
+            
+            <div>
+                  <Card hover={false} className="p-0 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-dark-700/50">
+                      <h2 className="font-display text-lg font-bold text-white flex items-center gap-2">
+                        <Star size={18} className="text-yellow-400" />
+                        Recent Feedback
+                      </h2>
+                    </div>
+                    <div className="p-4 space-y-2 max-h-72 overflow-y-auto">
+                      {recentFeedback.length === 0 ? (
+                        <p className="text-xs text-dark-500 text-center py-6">No feedback yet.</p>
+                      ) : (
+                        recentFeedback.map((fb) => (
+                          <div key={fb.feedbackId} className="glass-light rounded-xl p-3 flex items-center justify-between">
+                            <div>
+                              <p className="text-xs text-dark-400">Order #{fb.order?.orderId}</p>
+                              <p className="text-[10px] text-dark-600">
+                                {new Date(fb.feedbackTime).toLocaleString('en-US', {
+                                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })}
+                              </p>
+                            </div>
+                            <span className="text-sm font-bold text-yellow-400">
+                              {'★'.repeat(fb.rating)}{'☆'.repeat(5 - fb.rating)}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </Card>
+                </div>
             </div>{/* ── end LEFT ── */}
 
             {/* ── RIGHT SIDEBAR: Waiter Calls ── */}

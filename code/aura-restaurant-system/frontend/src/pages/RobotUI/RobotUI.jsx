@@ -3,7 +3,7 @@ import {
   ChefHat, Flame, Leaf, IceCreamCone, Coffee, UtensilsCrossed,
   Plus, Minus, LogOut, Sun, Moon, Lock, X,
   ShoppingCart, CreditCard, Trash2, CheckCircle2,
-  Clock, Bike, PartyPopper,Settings, Mic, Bot, Send, Wine // <-- Added Mic, Bot, Send, Wine
+  Clock, Bike, PartyPopper,Settings, Mic, Bot, Send, Wine, Star // <-- Added Mic, Bot, Send, Wine
 } from 'lucide-react';
 import { useAppContext }             from '../../context/AppContext';
 import { useRestaurant, ORDER_STATUS } from '../../context/RestaurantContext';
@@ -15,6 +15,8 @@ import OrderHistoryModal             from '../../components/OrderHistoryModal/Or
 import waiterAPI                     from '../../api/waiterAPI';
 import orderAPI                      from '../../api/orderAPI';
 import paymentAPI                    from '../../api/paymentAPI';
+import feedbackAPI                   from '../../api/feedbackAPI';
+import StarRatingModal               from '../../components/StarRatingModal/StarRatingModal';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const CATS = [
@@ -105,6 +107,7 @@ export default function RobotUI() {
   const [cashRequestSent, setCashRequestSent]   = useState(false);
   const [cardPaymentSuccess, setCardPaymentSuccess] = useState(false);
   const [canPay, setCanPay]                     = useState(true);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   const numericTableId = session?.tableNumber
     ? parseInt(session.tableNumber.replace(/\D/g, ''), 10) || 1
@@ -240,6 +243,7 @@ export default function RobotUI() {
       );
       setShowPaymentModal(false);
       setCashRequestSent(true);
+      setShowFeedbackModal(true);
       setTimeout(() => setCashRequestSent(false), 3000);
     } catch (err) {
       console.error('Cash payment request failed:', err);
@@ -308,6 +312,7 @@ export default function RobotUI() {
         }
         setShowPaymentModal(false);
         setCardPaymentSuccess(true);
+        setShowFeedbackModal(true);
         setTimeout(() => setCardPaymentSuccess(false), 3000);
         setPayingCard(false);
       };
@@ -327,6 +332,21 @@ export default function RobotUI() {
       console.error('Failed to start card payment:', err);
       setPaymentError('Could not start card payment. Please try again.');
       setPayingCard(false);
+    }
+  };
+
+// ── Feedback: submit star rating for every order in the paid bill ──
+  const handleFeedbackSubmit = async (score) => {
+    try {
+      await Promise.all(
+        billOrders.map(o =>
+          feedbackAPI.submitFeedback({ orderId: o.orderId, rating: score })
+        )
+      );
+    } catch (err) {
+      console.error('Failed to submit feedback:', err);
+    } finally {
+      setShowFeedbackModal(false);
     }
   };
 
@@ -1122,6 +1142,14 @@ const confirmStaffAction = async () => {
           </div>
         </div>
       )}
+
+      <StarRatingModal
+        isOpen={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        onSubmit={handleFeedbackSubmit}
+        isDark={D}
+      />
+      
     </div>
   );
 }
