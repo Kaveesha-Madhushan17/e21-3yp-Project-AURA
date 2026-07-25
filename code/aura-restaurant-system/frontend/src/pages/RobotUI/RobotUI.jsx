@@ -32,6 +32,14 @@ const CATS = [
 
 const CATEGORY_ORDER = ['Appetizers', 'Rice', 'Koththu', 'Noodle', 'desserts', 'Beverages', 'Other'];
 
+const WAITER_REASONS = [
+  { id: 'assistance', label: 'General Assistance',            emoji: '🙋' },
+  { id: 'cutlery',    label: 'Extra Cutlery',                  emoji: '🍴' },
+  { id: 'napkins',    label: 'Paper Napkins',                  emoji: '🧻' },
+  { id: 'plates',     label: 'Extra Plates or Share Platters', emoji: '🍽️' },
+  { id: 'cleanup',    label: 'Table Cleanup',                  emoji: '🧹' },
+];
+
 
 const STATUS_CFG = {
   PENDING:   { label: 'Sent — Awaiting Kitchen',  icon: Clock,       color: 'text-sky-400',    bg: 'bg-sky-500/10',    ring: 'ring-sky-500/25'    },
@@ -51,9 +59,15 @@ export default function RobotUI() {
   } = useAppContext();
   
   const [waiterCalled, setWaiterCalled] = useState(false);
-  const [waiterError, setWaiterError] = useState(false); 
+  const [waiterError, setWaiterError] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [modalMode, setModalMode] = useState('logout');
+
+  // -- Ask Waiter: reason-selection modal state --
+  const [showWaiterModal, setShowWaiterModal] = useState(false);
+  const [selectedReasons, setSelectedReasons] = useState([]);
+  const [customReason, setCustomReason] = useState('');
+  const [waiterSending, setWaiterSending] = useState(false);
 
   // -- New AI Chat States --
   const [isListening, setIsListening] = useState(false);
@@ -191,6 +205,38 @@ export default function RobotUI() {
       console.error('Order failed:', err);
     } finally {
       setOrderLoading(false);
+    }
+  };
+
+  // ── Ask Waiter: toggle a reason chip on/off ──
+  const toggleWaiterReason = (id) => {
+    setSelectedReasons(prev =>
+      prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
+    );
+  };
+
+  // ── Ask Waiter: build the message from selected reasons + send ──
+  const sendWaiterCall = async () => {
+    const parts = WAITER_REASONS
+      .filter(r => selectedReasons.includes(r.id))
+      .map(r => `${r.emoji} ${r.label}`);
+    if (customReason.trim()) parts.push(`📝 ${customReason.trim()}`);
+    const message = parts.length ? parts.join(', ') : 'Customer needs assistance';
+
+    setWaiterSending(true);
+    try {
+      await waiterAPI.callWaiter(numericTableId, table, message);
+      setShowWaiterModal(false);
+      setSelectedReasons([]);
+      setCustomReason('');
+      setWaiterCalled(true);
+      setTimeout(() => setWaiterCalled(false), 3000);
+    } catch (err) {
+      console.error('Waiter call failed:', err);
+      setWaiterError(true);
+      setTimeout(() => setWaiterError(false), 3000);
+    } finally {
+      setWaiterSending(false);
     }
   };
 
@@ -462,24 +508,12 @@ const confirmStaffAction = async () => {
 
           {/* 🔔 Ask Waiter Button */}
           <button
-            onClick={async () => {
-              try {
-                await waiterAPI.callWaiter(
-                  numericTableId,
-                  table,
-                  'Customer needs assistance'
-                );
-                setWaiterCalled(true);
-                setTimeout(() => setWaiterCalled(false), 3000);
-              } catch (err) {
-                console.error('Waiter call failed:', err);
-                setWaiterError(true);
-                setTimeout(() => setWaiterError(false), 3000);
-              }
+            onClick={() => {
+              setSelectedReasons([]);
+              setCustomReason('');
+              setShowWaiterModal(true);
             }}
-
-
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2
               rounded-[10px] text-[11px] sm:text-xs font-semibold transition-all 
               duration-200 hover:-translate-y-[1px] active:translate-y-0 hover:shadow-lg ${
               D
@@ -948,6 +982,86 @@ const confirmStaffAction = async () => {
                 )}
               </div>
             )}
+
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════
+          ASK WAITER — REASON SELECTION MODAL
+      ══════════════════════════════════════════════════ */}
+      {showWaiterModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6">
+          <div className={`w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl border shadow-2xl flex flex-col max-h-[90vh] ${tc.modal}`}>
+
+            {/* Header */}
+            <div className={`flex-shrink-0 flex items-center justify-between px-6 py-4 border-b ${tc.divider}`}>
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🔔</span>
+                <div>
+                  <h2 className={`text-lg font-bold ${tc.tt}`}>Call a Waiter</h2>
+                  <p className={`text-xs ${tc.st}`}>What do you need? Select all that apply.</p>
+                </div>
+              </div>
+              <button onClick={() => setShowWaiterModal(false)}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all active:scale-90 ${tc.btn2}`}>
+                <X size={16}/>
+              </button>
+            </div>
+
+            {/* Reason chips */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+              {WAITER_REASONS.map(r => {
+                const active = selectedReasons.includes(r.id);
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => toggleWaiterReason(r.id)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-2xl border text-left transition-all active:scale-[0.98] ${
+                      active
+                        ? (D ? 'bg-yellow-500/15 border-yellow-500/40' : 'bg-yellow-50 border-yellow-300')
+                        : tc.cartRow
+                    }`}>
+                    <span className="text-lg flex-shrink-0">{r.emoji}</span>
+                    <span className={`flex-1 text-sm font-medium ${tc.tt}`}>{r.label}</span>
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                      active
+                        ? 'bg-yellow-500 border-yellow-500'
+                        : (D ? 'border-white/20' : 'border-gray-300')
+                    }`}>
+                      {active && <CheckCircle2 size={14} className="text-white"/>}
+                    </div>
+                  </button>
+                );
+              })}
+
+              {/* Custom / special request */}
+              <div>
+                <label className={`block text-xs font-semibold mb-1.5 mt-2 ${tc.st}`}>
+                  Special Request (optional)
+                </label>
+                <textarea
+                  value={customReason}
+                  onChange={e => setCustomReason(e.target.value)}
+                  placeholder="Anything else the staff should know…"
+                  rows={2}
+                  className={`w-full rounded-xl px-4 py-3 border text-sm resize-none focus:outline-none focus:ring-2 focus:ring-yellow-500/30 ${tc.inp}`}
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className={`flex-shrink-0 px-6 py-4 border-t ${tc.divider}`}>
+              <button
+                onClick={sendWaiterCall}
+                disabled={waiterSending}
+                className="w-full h-12 rounded-2xl bg-yellow-500 hover:bg-yellow-400 disabled:opacity-60 text-white font-bold text-base transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-yellow-500/30">
+                {waiterSending
+                  ? <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Sending...</>
+                  : <><span className="text-base">🔔</span> Call Waiter</>
+                }
+              </button>
+            </div>
 
           </div>
         </div>
