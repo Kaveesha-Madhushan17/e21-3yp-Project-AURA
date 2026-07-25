@@ -26,6 +26,7 @@ import { useRestaurant } from '../../context/RestaurantContext';
 import { AVAILABLE_MENU_IMAGES, getMenuImageSrc, isKnownMenuImage } from '../../utils/menuImages';
 import { orderMqtt } from '../../api/mqttclient';
 import feedbackAPI from '../../api/feedbackAPI';
+import { useWaiterCallChime } from '../../hooks/useWaiterCallChime';
 
 // ── Mock robot fleet data ─────────────────────────────────────────────────────
 // [BACKEND INTEGRATION: TODO] - GET /api/robots/status
@@ -64,6 +65,10 @@ export default function AdminDashboard() {
     clearWaiterCalls,
   } = useRestaurant();
   const isAdmin = session?.role === 'admin';
+
+  // Rings the waiter-call chime — including catching up on load/refresh and
+  // retrying on first click if the browser blocked autoplay.
+  useWaiterCallChime(waiterCalls);
 
   // ── Real-time Stats State ────────────────────────────────────────────────
   const [realtimeStats, setRealtimeStats] = useState({
@@ -594,7 +599,7 @@ const handleAddItem = async (e) => {
               {waiterCalls.length > 0 && (
                 <div className="p-3 border-t border-white/5">
                   <button
-                    onClick={() => setWaiterCalls([])}
+                    onClick={clearWaiterCalls}
                     className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-500 hover:text-gray-300 text-xs font-medium transition-all"
                   >
                     Clear All
