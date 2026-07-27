@@ -75,6 +75,21 @@ const STORAGE_KEY   = 'aura_restaurant_state';
 const STORAGE_VER   = 1; // bump this to wipe stale data on breaking changes
 const DAY_IN_MS     = 24 * 60 * 60 * 1000;
 
+// Waiter calls have no backend persistence (MQTT is fire-and-forget), so a
+// page refresh would otherwise wipe the list. Persist to localStorage —
+// also lets other tabs (Kitchen + Admin) pick up dismiss/clear actions.
+const WAITER_CALLS_KEY = 'aura_waiter_calls';
+
+function loadWaiterCalls() {
+  try {
+    const raw = localStorage.getItem(WAITER_CALLS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 const INITIAL_STATE = { orderHistory: [], ticketCounter: 1 };
 
 export const ORDER_STATUS = {
@@ -212,11 +227,35 @@ const RestaurantContext = createContext(null);
 export function RestaurantProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
   const [deliveredHistory, setDeliveredHistory] = useState([]);
-  const [waiterCalls, setWaiterCalls] = useState([]);
+  const [waiterCalls, setWaiterCalls] = useState(loadWaiterCalls);
 
   const dismissWaiterCall = useCallback((callId) => {setWaiterCalls(prev => prev.map(c => c.id === callId ? { ...c, seen: true } : c));}, []);
 
   const clearWaiterCalls = useCallback(() => {setWaiterCalls([]);}, []);
+
+  // ── Persist waiter calls so a refresh doesn't wipe them ────────────────────
+  useEffect(() => {
+    try {
+      localStorage.setItem(WAITER_CALLS_KEY, JSON.stringify(waiterCalls));
+    } catch (err) {
+      console.warn('Failed to persist waiter calls:', err);
+    }
+  }, [waiterCalls]);
+
+  // ── Cross-tab sync: Kitchen dismiss/clear reflected in Admin tab & vice versa ──
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== WAITER_CALLS_KEY) return;
+      try {
+        const parsed = e.newValue ? JSON.parse(e.newValue) : [];
+        setWaiterCalls(Array.isArray(parsed) ? parsed : []);
+      } catch (err) {
+        console.warn('Failed to sync waiter calls from another tab:', err);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
 
 // ── Single centralized MQTT listener for waiter calls ───────────────────────

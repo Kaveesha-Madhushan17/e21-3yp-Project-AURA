@@ -20,6 +20,7 @@ import { useAppContext } from '../../context/AppContext';
 import { formatPrice, getTimeSince } from '../../utils/helpers';
 import { getMenuImageSrc } from '../../utils/menuImages';
 import { orderMqtt } from '../../api/mqttclient';
+import { useWaiterCallChime } from '../../hooks/useWaiterCallChime';
 //import { orderWebSocket } from '../../api/webSocket';
 
 // ─── Column config ────────────────────────────────────────────────────────────
@@ -67,6 +68,10 @@ export default function KitchenDisplay() {
     dismissWaiterCall,
     clearWaiterCalls,
   } = useRestaurant();
+
+  // Rings the waiter-call chime — including catching up on load/refresh and
+  // retrying on first click if the browser blocked autoplay.
+  useWaiterCallChime(waiterCalls);
 
 
   const [now, setNow] = useState(new Date());
