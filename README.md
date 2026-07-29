@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🐾 AURA — Automated Urban Restaurant Assistant
+# 🤖 AURA — Automated Urban Restaurant Assistant
 
 ### *The dining companion that turns to face you.*
 
