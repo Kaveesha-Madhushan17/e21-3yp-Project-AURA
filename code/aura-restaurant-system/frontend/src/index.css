@@ -614,3 +614,54 @@ html.lenis body { height: auto; }
 .glass-hero-btn { background: rgba(255,255,255,0.05); }
 .glass-hero-btn:hover { background: rgba(0,245,255,0.04); }
 
+
+/* ════════════════════════════════════════════════════════════════
+   RESERVATION PAGE — shared input & label utilities
+════════════════════════════════════════════════════════════════ */
+
+/* Reusable form input */
+.aura-input {
+    display:          block;
+    width:            100%;
+    background:       rgba(17, 24, 39, 0.70);
+    border:           1px solid rgba(255, 255, 255, 0.09);
+    border-radius:    0.75rem;          /* rounded-xl */
+    padding:          0.75rem 1rem;
+    color:            #f9fafb;
+    font-size:        0.875rem;
+    outline:          none;
+    transition:       border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+    backdrop-filter:  blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.aura-input:focus {
+    border-color: rgba(0, 245, 255, 0.55);
+    box-shadow:   0 0 0 3px rgba(0, 245, 255, 0.10), 0 0 20px rgba(0, 245, 255, 0.08);
+    background:   rgba(17, 24, 39, 0.85);
+}
+
+.aura-input::placeholder {
+    color: rgba(156, 163, 175, 0.45);
+}
+
+/* Select arrow colour on dark bg */
+.aura-input option {
+    background: #111827;
+    color:      #f9fafb;
+}
+
+/* Reusable form label */
+.aura-label {
+    display:        block;
+    font-size:      0.7rem;
+    font-weight:    700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color:          rgb(107, 114, 128);    /* dark-300 */
+}
+
+/* White border utility (used in reservation card) */
+.border-white\/7  { border-color: rgba(255, 255, 255, 0.07); }
+.border-white\/8  { border-color: rgba(255, 255, 255, 0.08); }
+
