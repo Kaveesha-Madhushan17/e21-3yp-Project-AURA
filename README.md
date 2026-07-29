@@ -4,7 +4,7 @@
 
 ### *The dining companion that turns to face you.*
 
-A socially-aware, table-top robot that greets guests, tracks faces, takes orders, processes payments, and entertains — all without a single wire on the table.
+A socially-aware, table-top robot that greets guests, tracks faces, takes orders, processes payments, and entertains all without a single wire on the table.
 
 [![Repository](https://img.shields.io/badge/repo-e21--3yp--AURA-181717?logo=github&logoColor=white)](https://github.com/cepdnaclk/e21-3yp-AURA)
 [![Department](https://img.shields.io/badge/Dept-Computer%20Engineering-blue)](http://www.ce.pdn.ac.lk/)
@@ -36,7 +36,7 @@ A socially-aware, table-top robot that greets guests, tracks faces, takes orders
 
 In the modern hospitality industry, customers often face delays in ordering, difficulties communicating with staff due to language barriers, and a lack of engaging entertainment while waiting. **AURA (Automated Urban Restaurant Assistant)** addresses these issues by introducing a smart, interactive table-top robot companion.
 
-Unlike standard digital kiosks, AURA applies **Social Robotics** principles — active face tracking, voice interaction, expression recognition, and ambient lighting control — to create a "living" digital concierge. It streamlines ordering, entertains guests, and frees up staff from repetitive tasks.
+Unlike standard digital kiosks, AURA applies **Social Robotics** principles — active face tracking, voice interaction, expression recognition, and ambient lighting control  to create a "living" digital concierge. It streamlines ordering, entertains guests, and frees up staff from repetitive tasks.
 
 > 🔌 **Zero Infrastructure Cost** — fully wireless and plug and play, AURA drops onto any table with no rewiring required.
 
