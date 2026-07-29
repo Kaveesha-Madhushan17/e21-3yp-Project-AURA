@@ -184,3 +184,433 @@ body {
     padding-bottom: 6rem;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   AURA Landing Page — Revamped Component Styles
+   All rules below are NEW additions; nothing above was modified.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Glassmorphism Nav (scrolled state) ─── */
+.glass-nav {
+  background: rgba(13, 17, 23, 0.88);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Cyan-tinted glass button (nav CTA) ─── */
+.glass-cyan-btn {
+  background: rgba(0, 245, 255, 0.04);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* ─── Hero ghost button ─── */
+.glass-hero-btn {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #e6e8ec;
+  transition: all 0.3s ease;
+}
+
+/* ─── Shimmer sweep on gold CTA buttons ─── */
+.hero-btn-gold {
+  position: relative;
+  overflow: hidden;
+}
+
+/* ─── Animated hero scan line ─── */
+@keyframes heroScanLine {
+  0%   { transform: translateY(-5vh);  opacity: 0; }
+  5%   { opacity: 1; }
+  95%  { opacity: 0.4; }
+  100% { transform: translateY(105vh); opacity: 0; }
+}
+
+.hero-scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 245, 255, 0.0) 20%,
+    rgba(0, 245, 255, 0.45) 50%,
+    rgba(0, 245, 255, 0.0) 80%,
+    transparent 100%
+  );
+  animation: heroScanLine 7s linear infinite;
+  pointer-events: none;
+}
+
+/* ─── Food showcase card — 3D perspective host ─── */
+.food-showcase-card {
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform;
+  transition: box-shadow 0.4s ease;
+}
+
+.food-showcase-card:hover {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 245, 255, 0.08);
+}
+
+/* ─── Robot video wrapper — 3D float animation ─── */
+.robot-video-wrapper {
+  animation: robotFloat 5s ease-in-out infinite;
+}
+
+@keyframes robotFloat {
+  0%, 100% { transform: translateY(0px);  }
+  50%       { transform: translateY(-14px); }
+}
+
+/* ─── Team member card ─── */
+.team-member-card {
+  transition: box-shadow 0.35s ease, transform 0.35s ease;
+}
+
+.team-member-card:hover {
+  box-shadow:
+    0 24px 50px rgba(0, 0, 0, 0.45),
+    0 0 22px rgba(0, 245, 255, 0.07);
+}
+
+/* ─── Scale-up on image hover (non-Tailwind fraction) ─── */
+.group-hover\:scale-107:hover img {
+  transform: scale(1.07);
+}
+
+/* ─── Gradient text utility (robot section heading) ─── */
+.gradient-text {
+  background: linear-gradient(135deg, #4c6ef5 0%, #00f5ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Neon-purple text (feature icons) ─── */
+.text-neon-purple {
+  color: #7c3aed;
+}
+
+.text-neon-green {
+  color: #10b981;
+}
+
+/* ─── Subtle inner ambient glow on glass cards ─── */
+@layer components {
+  .glass-card-ambient {
+    background: rgba(13, 17, 23, 0.72);
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* ─── Smooth hover transition for group scale ─── */
+.group:hover .group-hover\:scale-110 {
+  transform: scale(1.10);
+}
+
+/* ─── Footer background overlay gradient ─── */
+.footer-bg-overlay {
+  background: linear-gradient(
+    to top,
+    rgba(13, 17, 23, 1)   0%,
+    rgba(13, 17, 23, 0.85) 40%,
+    rgba(13, 17, 23, 0.55) 100%
+  );
+}
+
+/* ─── Responsive adjustments ─── */
+@media (max-width: 640px) {
+  .robot-video-wrapper {
+    animation-duration: 4s;
+  }
+
+  .hero-scan-line {
+    display: none; /* Reduce motion on small screens */
+  }
+}
+
+/* ─── Respect prefers-reduced-motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  .hero-scan-line,
+  .robot-video-wrapper,
+  .animate-float,
+  .animate-pulse-soft {
+    animation: none;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   GSAP + Lenis addition (v2 revamp)
+   Appended — does NOT modify any existing rules above
+════════════════════════════════════════════════════════════════ */
+
+/* ─── Lenis smooth scroll base ─── */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+/* ─── Food section carousel ─── */
+.food-carousel-track {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ─── Glass hero ghost button ─── */
+.glass-hero-btn {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.90);
+}
+
+.glass-hero-btn:hover {
+  background: rgba(0, 245, 255, 0.04);
+}
+
+/* ─── Gold shimmer CTA (hero, footer) ─── */
+.hero-btn-gold {
+  position: relative;
+  isolation: isolate;
+}
+
+/* ─── Neon pink text ─── */
+.text-neon-pink {
+  color: #ec4899;
+}
+
+/* ─── Cyan glass button ─── */
+.glass-cyan-btn {
+  background: rgba(0, 245, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ─── Team member card GSAP target — preserves existing .team-member-card ─── */
+.team-member-card-gsap {
+  transition: box-shadow 0.35s ease, transform 0.35s ease;
+}
+
+.team-member-card-gsap:hover {
+  box-shadow:
+    0 24px 50px rgba(0, 0, 0, 0.45),
+    0 0 22px rgba(0, 245, 255, 0.07);
+  transform: translateY(-4px);
+}
+
+/* ─── Gold text utility ─── */
+.text-gold-400 {
+  color: #facc15;
+}
+
+/* ─── Neon blue text ─── */
+.text-neon-blue {
+  color: #4c6ef5;
+}
+
+/* ─── Transition duration 400ms (Tailwind doesn't have this) ─── */
+.duration-400 {
+  transition-duration: 400ms;
+}
+
+/* ─── Opacity/8 border fallback (Tailwind v3 may not generate /8) ─── */
+.border-white\/8 {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ─── Prefers-reduced-motion: disable GSAP floating ─── */
+@media (prefers-reduced-motion: reduce) {
+  .robot-feature-card {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   CUSTOM CURSOR — v3 (GSAP-driven dot + lagging ring)
+════════════════════════════════════════════════════════════════ */
+
+/* Hide native cursor inside the landing page wrapper */
+.aura-landing,
+.aura-landing * {
+    cursor: none !important;
+}
+
+/* Touch devices → restore normal cursor */
+@media (hover: none) {
+    .aura-landing,
+    .aura-landing * { cursor: auto !important; }
+    .cursor-dot,
+    .cursor-ring    { display: none !important; }
+}
+
+/* ── Cursor dot — follows mouse instantly ── */
+.cursor-dot {
+    position: fixed;
+    top:  0;
+    left: 0;
+    width:  6px;
+    height: 6px;
+    background:    #00f5ff;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 10000;
+    will-change: transform;
+    transform: translate(-50%, -50%);
+    box-shadow:
+        0 0  8px rgba(0, 245, 255, 0.70),
+        0 0 18px rgba(0, 245, 255, 0.35);
+}
+
+/* ── Cursor ring — lerps behind with GSAP ticker ── */
+.cursor-ring {
+    position: fixed;
+    top:  0;
+    left: 0;
+    width:  34px;
+    height: 34px;
+    border:        1.5px solid rgba(0, 245, 255, 0.65);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    will-change: transform;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 10px rgba(0, 245, 255, 0.10);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TYPOGRAPHY & GRADIENT HELPERS (v3 additions)
+════════════════════════════════════════════════════════════════ */
+
+/* Gold gradient headline text */
+.text-gradient-gold {
+    background: linear-gradient(125deg, #facc15 0%, #f59e0b 55%, #fde68a 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Gold colours (Tailwind doesn't ship gold-* out of the box) */
+.text-gold-400   { color: #facc15; }
+.text-gold-500   { color: #eab308; }
+.bg-gold-500\/5  { background-color: rgba(234,179,8,0.05); }
+.border-gold-500\/20 { border-color: rgba(234,179,8,0.20); }
+
+/* ════════════════════════════════════════════════════════════════
+   CAROUSEL PARALLAX — helpers
+════════════════════════════════════════════════════════════════ */
+
+/* Glassmorphism arrow buttons */
+.carousel-arrow {
+    backdrop-filter: blur(14px) saturate(1.2);
+    -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+
+/* Blur-in / blur-out for text transitions (via framer-motion inline) */
+/* Already handled via framer-motion filter prop in JSX */
+
+/* ════════════════════════════════════════════════════════════════
+   transition-duration 400ms utility
+════════════════════════════════════════════════════════════════ */
+.duration-400 { transition-duration: 400ms; }
+
+
+/* ════════════════════════════════════════════════════════════════
+   CUSTOM CURSOR v4 — neon-blue arrow SVG + lagging ring
+════════════════════════════════════════════════════════════════ */
+
+/* Hide native cursor inside the landing page ONLY */
+.aura-landing,
+.aura-landing * { cursor: none !important; }
+
+/* Touch / coarse-pointer devices → restore native cursor */
+@media (hover: none), (pointer: coarse) {
+    .aura-landing,
+    .aura-landing * { cursor: auto !important; }
+    .cursor-arrow-svg,
+    .cursor-ring-follow { display: none !important; }
+}
+
+/* ── Arrow SVG — tip is at SVG origin (0,0) ── */
+.cursor-arrow-svg {
+    position: fixed;
+    top:  0;
+    left: 0;
+    pointer-events: none;
+    z-index: 10000;
+    will-change: transform;
+    filter:
+        drop-shadow(0 0 5px rgba(0, 200, 255, 1))
+        drop-shadow(0 0 14px rgba(0, 200, 255, 0.70))
+        drop-shadow(0 0 28px rgba(0, 200, 255, 0.35));
+}
+
+/* ── Trailing ring — centered on GSAP lerp position ── */
+.cursor-ring-follow {
+    position: fixed;
+    top:  0;
+    left: 0;
+    width:  38px;
+    height: 38px;
+    border:        1.5px solid rgba(0, 200, 255, 0.55);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    will-change: transform;
+    box-shadow: 0 0 12px rgba(0, 200, 255, 0.12);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   GALLERY CARD hover scale utility
+════════════════════════════════════════════════════════════════ */
+.gallery-card:hover .group-hover\:scale-108,
+.gallery-card img { transition: transform 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+.gallery-card:hover img { transform: scale(1.08); }
+
+/* ════════════════════════════════════════════════════════════════
+   Gold utilities (Tailwind doesn't ship gold-*)
+════════════════════════════════════════════════════════════════ */
+.text-gold-400        { color: #facc15; }
+.bg-gold-500\/5       { background-color: rgba(234,179,8,0.05); }
+.border-gold-500\/20  { border-color: rgba(234,179,8,0.20); }
+
+/* ════════════════════════════════════════════════════════════════
+   Neon blue text
+════════════════════════════════════════════════════════════════ */
+.text-neon-blue { color: #4c6ef5; }
+
+/* ════════════════════════════════════════════════════════════════
+   Lenis base (idempotent if already present)
+════════════════════════════════════════════════════════════════ */
+html.lenis,
+html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+/* ════════════════════════════════════════════════════════════════
+   Misc helpers
+════════════════════════════════════════════════════════════════ */
+.duration-400   { transition-duration: 400ms; }
+.glass-hero-btn { background: rgba(255,255,255,0.05); }
+.glass-hero-btn:hover { background: rgba(0,245,255,0.04); }
+
