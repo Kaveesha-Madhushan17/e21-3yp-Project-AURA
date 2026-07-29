@@ -115,7 +115,7 @@ SSL termination and WSS upgrade are handled entirely at the Nginx layer. Payment
 | **Frontend** | React + Vite + Tailwind CSS, deployed via AWS S3 / CloudFront |
 | **UI / UX** | WebSockets (live dashboard), Entertainment Module (games / songs) |
 | **Integrations** | Gemini AI, external payment networks, secured over AWS API Gateway |
-| **Robot Frontend** | Python (PyQt / Kivy) for the touch interface |
+| **Robot Frontend** | ReactJs  |
 | **Robot Logic** | OpenCV for face tracking, GPIO Zero for servo control |
 | **Communication** | MQTT Protocol (Paho-MQTT) for lightweight messaging |
 
