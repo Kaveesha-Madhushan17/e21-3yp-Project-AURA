@@ -57,7 +57,7 @@ AURA isn't just a screen on a stand — it's a companion with personality, prese
 | 🔋 | **Wireless & Portable** | Battery-powered design requiring no table wiring. |
 
 <div align="center">
-<img src="docs/images/final_product.jpeg" alt="AURA on the table" width="420"/>
+<img src="docs/images/meet_aura.jpeg" alt="AURA on the table" width="420"/>
 <p><em>AURA greeting a guest and displaying the live ordering interface.</em></p>
 </div>
 
@@ -122,7 +122,7 @@ SSL termination and WSS upgrade are handled entirely at the Nginx layer. Payment
 ### 🔩 Hardware Specifications
 
 <div align="center">
-<img src="docs/images/hardware_tablw.png" alt="AURA Hardware Specifications" width="850"/>
+<img src="docs/images/hardware_table.png" alt="AURA Hardware Specifications" width="850"/>
 </div>
 
 | Category | Specification |
@@ -138,7 +138,7 @@ SSL termination and WSS upgrade are handled entirely at the Nginx layer. Payment
 
 ## 🐈 Chassis Design (CAD / Blender Model)
 
-AURA's chassis was fully modeled in **Blender** before fabrication — a cat-inspired shell chosen to make the robot feel approachable and characterful, while housing the head pan/tilt mechanism, servo assembly, control boards, and gear-driven rotation base.
+AURA's chassis was fully modeled in **Blender** before fabrication  a cat-inspired shell chosen to make the robot feel approachable and characterful, while housing the head pan/tilt mechanism, servo assembly, control boards, and gear-driven rotation base.
 
 <table align="center">
 <tr>
@@ -151,28 +151,28 @@ AURA's chassis was fully modeled in **Blender** before fabrication — a cat-ins
 </tr>
 </table>
 
-The gear-driven base (bottom-right) allows AURA to smoothly rotate its whole body toward a guest, while the internal frame keeps servo wiring and control boards neatly isolated from the outer cat-eared shell — the same shell visible in the finished, 3D-printed unit below.
+The gear-driven base (bottom-right) allows AURA to smoothly rotate its whole body toward a guest, while the internal frame keeps servo wiring and control boards neatly isolated from the outer cat-eared shell  the same shell visible in the finished, 3D-printed unit below.
 
 <div align="center">
-<img src="docs/images/final_product.jpeg" alt="AURA final printed and assembled product" width="450"/>
+<img src="docs/images/real.jpg" alt="AURA final printed and assembled product" width="450"/>
 </div>
 
 ---
 
 ## 🔄 Data Flow
 
-1. **Input** — User interacts via touch or voice; the camera tracks the user's face and reads expressions.
-2. **Processing** — The Raspberry Pi processes inputs locally and generates MQTT payloads.
-3. **Transmission** — Data is sent over Wi-Fi to the MQTT broker and onward to the Central Server.
-4. **Action** — The Kitchen Display updates with the order; AURA updates its UI, voice response, and ambient lighting accordingly.
+1. **Input** -  User interacts via touch or voice; the camera tracks the user's face and reads expressions.
+2. **Processing** -  The Raspberry Pi processes inputs locally and generates MQTT payloads.
+3. **Transmission** -  Data is sent over Wi-Fi to the MQTT broker and onward to the Central Server.
+4. **Action** -  The Kitchen Display updates with the order; AURA updates its UI, voice response, and ambient lighting accordingly.
 
 ---
 
 ## ✅ Testing
 
-- **Unit Testing** — individual testing of servo mechanisms, camera feed, and UI components.
-- **Integration Testing** — verifying MQTT message delivery between robot and server.
-- **User Acceptance Testing (UAT)** — real-world trials in a café environment to assess battery life and user interaction.
+- **Unit Testing** - individual testing of servo mechanisms, camera feed, and UI components.
+- **Integration Testing** - verifying MQTT message delivery between robot and server.
+- **User Acceptance Testing (UAT)** - real-world trials in a café environment to assess battery life and user interaction.
 
 ---
 
