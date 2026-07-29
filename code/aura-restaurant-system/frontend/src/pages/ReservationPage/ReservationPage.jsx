@@ -8,7 +8,7 @@
  *      Only the visual/layout layer has been updated.
  * ============================================================
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { reservationAPI } from '../../api/reservationAPI';
 import auraLogo from '../../assets/aura_logo.png';
+import gsap     from 'gsap';
 
 export default function ReservationPage() {
     const navigate = useNavigate();
@@ -73,6 +74,93 @@ export default function ReservationPage() {
         const date = new Date(dateTime);
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
+
+    /* ── Custom cursor refs ── */
+    const cursorArrowRef = useRef(null);
+    const cursorRingRef  = useRef(null);
+
+    /* ── Cursor: none on body while this page is mounted ── */
+    useEffect(() => {
+        if (!window.matchMedia('(pointer: fine)').matches) return;
+        document.body.style.cursor = 'none';
+        return () => { document.body.style.cursor = ''; };
+    }, []);
+
+    /* ── GSAP neon-blue arrow cursor tracking ── */
+    useEffect(() => {
+        if (!window.matchMedia('(pointer: fine)').matches) return;
+        const arrow = cursorArrowRef.current;
+        const ring  = cursorRingRef.current;
+        if (!arrow || !ring) return;
+
+        const RING_W = 38;
+        const HALF_R = RING_W / 2;
+        const data   = { x: -200, y: -200, rx: -200, ry: -200 };
+
+        const setAX = gsap.quickSetter(arrow, 'x', 'px');
+        const setAY = gsap.quickSetter(arrow, 'y', 'px');
+        const setRX = gsap.quickSetter(ring,  'x', 'px');
+        const setRY = gsap.quickSetter(ring,  'y', 'px');
+
+        gsap.set([arrow, ring], { x: -200, y: -200, opacity: 0 });
+        let visible = false;
+
+        const onMove = (e) => {
+            data.x = e.clientX;
+            data.y = e.clientY;
+            setAX(e.clientX);
+            setAY(e.clientY);
+            if (!visible) {
+                visible = true;
+                gsap.to([arrow, ring], { opacity: 1, duration: 0.35 });
+            }
+        };
+
+        const tick = () => {
+            data.rx += (data.x - data.rx) * 0.11;
+            data.ry += (data.y - data.ry) * 0.11;
+            setRX(data.rx - HALF_R);
+            setRY(data.ry - HALF_R);
+        };
+
+        const onOver = (e) => {
+            if (e.target.closest('button, a, [data-cursor-hover]')) {
+                gsap.to(ring,  { scale: 1.8, borderColor: 'rgba(250,204,21,0.9)', duration: 0.22 });
+                gsap.to(arrow, { filter: 'drop-shadow(0 0 8px rgba(250,204,21,1)) drop-shadow(0 0 20px rgba(250,204,21,0.6))', duration: 0.22 });
+            }
+        };
+        const onOut = (e) => {
+            if (e.target.closest('button, a, [data-cursor-hover]')) {
+                gsap.to(ring,  { scale: 1, borderColor: 'rgba(0,200,255,0.55)', duration: 0.28 });
+                gsap.to(arrow, { filter: 'drop-shadow(0 0 5px rgba(0,200,255,1)) drop-shadow(0 0 14px rgba(0,200,255,0.7)) drop-shadow(0 0 28px rgba(0,200,255,0.35))', duration: 0.28 });
+            }
+        };
+
+        const onDown = () => gsap.to(arrow, { scale: 0.8, transformOrigin: '0% 0%', duration: 0.1, ease: 'power2.in' });
+        const onUp   = () => gsap.to(arrow, { scale: 1,   transformOrigin: '0% 0%', duration: 0.4, ease: 'elastic.out(1,0.45)' });
+        const onLeave = () => { visible = false; gsap.to([arrow, ring], { opacity: 0, duration: 0.3 }); };
+        const onEnter = () => { if (visible) gsap.to([arrow, ring], { opacity: 1, duration: 0.3 }); };
+
+        gsap.ticker.add(tick);
+        document.addEventListener('mousemove',  onMove);
+        document.addEventListener('mouseover',  onOver);
+        document.addEventListener('mouseout',   onOut);
+        document.addEventListener('mousedown',  onDown);
+        document.addEventListener('mouseup',    onUp);
+        document.addEventListener('mouseleave', onLeave);
+        document.addEventListener('mouseenter', onEnter);
+
+        return () => {
+            gsap.ticker.remove(tick);
+            document.removeEventListener('mousemove',  onMove);
+            document.removeEventListener('mouseover',  onOver);
+            document.removeEventListener('mouseout',   onOut);
+            document.removeEventListener('mousedown',  onDown);
+            document.removeEventListener('mouseup',    onUp);
+            document.removeEventListener('mouseleave', onLeave);
+            document.removeEventListener('mouseenter', onEnter);
+        };
+    }, []);
 
     /* ── Fetch slots (unchanged) ── */
     useEffect(() => {
@@ -167,6 +255,28 @@ export default function ReservationPage() {
     if (step === 2 && confirmedData) {
         return (
             <div className="min-h-screen bg-dark-950 flex items-center justify-center p-6 relative overflow-hidden">
+                {/* ── Neon-blue arrow cursor (same as LandingPage) ── */}
+                <svg
+                    ref={cursorArrowRef}
+                    className="cursor-arrow-svg"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 18 24"
+                    width="18" height="24"
+                    aria-hidden="true" focusable="false"
+                >
+                    <defs>
+                        <linearGradient id="ag-res" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%"   stopColor="#00f5ff" />
+                            <stop offset="100%" stopColor="#2563eb" />
+                        </linearGradient>
+                    </defs>
+                    <path
+                        d="M 0 0 L 0 18 L 5 13 L 8.5 21.5 L 12 20 L 8.5 12 L 16 12 Z"
+                        fill="url(#ag-res)"
+                        stroke="rgba(0,200,255,0.25)" strokeWidth="0.6" strokeLinejoin="round"
+                    />
+                </svg>
+                <div ref={cursorRingRef} className="cursor-ring-follow" />
                 {/* Ambient blobs */}
                 <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/8 blur-[120px] rounded-full pointer-events-none" />
                 <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-neon-cyan/6 blur-[100px] rounded-full pointer-events-none" />
@@ -275,6 +385,29 @@ export default function ReservationPage() {
     ══════════════════════════════════════════════════════════ */
     return (
         <div className="min-h-screen bg-dark-950 relative overflow-hidden flex flex-col">
+
+            {/* ── Neon-blue arrow cursor (same as LandingPage) ── */}
+            <svg
+                ref={cursorArrowRef}
+                className="cursor-arrow-svg"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 18 24"
+                width="18" height="24"
+                aria-hidden="true" focusable="false"
+            >
+                <defs>
+                    <linearGradient id="ag-res" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%"   stopColor="#00f5ff" />
+                        <stop offset="100%" stopColor="#2563eb" />
+                    </linearGradient>
+                </defs>
+                <path
+                    d="M 0 0 L 0 18 L 5 13 L 8.5 21.5 L 12 20 L 8.5 12 L 16 12 Z"
+                    fill="url(#ag-res)"
+                    stroke="rgba(0,200,255,0.25)" strokeWidth="0.6" strokeLinejoin="round"
+                />
+            </svg>
+            <div ref={cursorRingRef} className="cursor-ring-follow" />
 
             {/* ── Background ambient blobs ── */}
             <div className="absolute top-[-20%] left-[-10%] w-[55%] h-[55%] bg-neon-blue/12 blur-[140px] rounded-full pointer-events-none" />
