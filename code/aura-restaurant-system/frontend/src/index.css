@@ -184,3 +184,166 @@ body {
     padding-bottom: 6rem;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   AURA Landing Page — Revamped Component Styles
+   All rules below are NEW additions; nothing above was modified.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Glassmorphism Nav (scrolled state) ─── */
+.glass-nav {
+  background: rgba(13, 17, 23, 0.88);
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Cyan-tinted glass button (nav CTA) ─── */
+.glass-cyan-btn {
+  background: rgba(0, 245, 255, 0.04);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* ─── Hero ghost button ─── */
+.glass-hero-btn {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #e6e8ec;
+  transition: all 0.3s ease;
+}
+
+/* ─── Shimmer sweep on gold CTA buttons ─── */
+.hero-btn-gold {
+  position: relative;
+  overflow: hidden;
+}
+
+/* ─── Animated hero scan line ─── */
+@keyframes heroScanLine {
+  0%   { transform: translateY(-5vh);  opacity: 0; }
+  5%   { opacity: 1; }
+  95%  { opacity: 0.4; }
+  100% { transform: translateY(105vh); opacity: 0; }
+}
+
+.hero-scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 245, 255, 0.0) 20%,
+    rgba(0, 245, 255, 0.45) 50%,
+    rgba(0, 245, 255, 0.0) 80%,
+    transparent 100%
+  );
+  animation: heroScanLine 7s linear infinite;
+  pointer-events: none;
+}
+
+/* ─── Food showcase card — 3D perspective host ─── */
+.food-showcase-card {
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform;
+  transition: box-shadow 0.4s ease;
+}
+
+.food-showcase-card:hover {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 245, 255, 0.08);
+}
+
+/* ─── Robot video wrapper — 3D float animation ─── */
+.robot-video-wrapper {
+  animation: robotFloat 5s ease-in-out infinite;
+}
+
+@keyframes robotFloat {
+  0%, 100% { transform: translateY(0px);  }
+  50%       { transform: translateY(-14px); }
+}
+
+/* ─── Team member card ─── */
+.team-member-card {
+  transition: box-shadow 0.35s ease, transform 0.35s ease;
+}
+
+.team-member-card:hover {
+  box-shadow:
+    0 24px 50px rgba(0, 0, 0, 0.45),
+    0 0 22px rgba(0, 245, 255, 0.07);
+}
+
+/* ─── Scale-up on image hover (non-Tailwind fraction) ─── */
+.group-hover\:scale-107:hover img {
+  transform: scale(1.07);
+}
+
+/* ─── Gradient text utility (robot section heading) ─── */
+.gradient-text {
+  background: linear-gradient(135deg, #4c6ef5 0%, #00f5ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Neon-purple text (feature icons) ─── */
+.text-neon-purple {
+  color: #7c3aed;
+}
+
+.text-neon-green {
+  color: #10b981;
+}
+
+/* ─── Subtle inner ambient glow on glass cards ─── */
+@layer components {
+  .glass-card-ambient {
+    background: rgba(13, 17, 23, 0.72);
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* ─── Smooth hover transition for group scale ─── */
+.group:hover .group-hover\:scale-110 {
+  transform: scale(1.10);
+}
+
+/* ─── Footer background overlay gradient ─── */
+.footer-bg-overlay {
+  background: linear-gradient(
+    to top,
+    rgba(13, 17, 23, 1)   0%,
+    rgba(13, 17, 23, 0.85) 40%,
+    rgba(13, 17, 23, 0.55) 100%
+  );
+}
+
+/* ─── Responsive adjustments ─── */
+@media (max-width: 640px) {
+  .robot-video-wrapper {
+    animation-duration: 4s;
+  }
+
+  .hero-scan-line {
+    display: none; /* Reduce motion on small screens */
+  }
+}
+
+/* ─── Respect prefers-reduced-motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  .hero-scan-line,
+  .robot-video-wrapper,
+  .animate-float,
+  .animate-pulse-soft {
+    animation: none;
+  }
+}
