@@ -12,7 +12,7 @@ A socially-aware, table-top robot that greets guests, tracks faces, takes orders
 [![Status](https://img.shields.io/badge/status-active-brightgreen)]()
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)]()
 
-<img src="docs/images/final_product.jpeg" alt="AURA Final Product" width="480"/>
+<img src="images/final_product.jpeg" alt="AURA Final Product" width="480"/>
 
 </div>
 
@@ -57,7 +57,7 @@ AURA isn't just a screen on a stand — it's a companion with personality, prese
 | 🔋 | **Wireless & Portable** | Battery-powered design requiring no table wiring. |
 
 <div align="center">
-<img src="docs/images/meet_aura.jpeg" alt="AURA on the table" width="420"/>
+<img src="images/meet_aura.jpeg" alt="AURA on the table" width="420"/>
 <p><em>AURA greeting a guest and displaying the live ordering interface.</em></p>
 </div>
 
@@ -74,7 +74,7 @@ AURA's system is composed of three coordinated layers:
 ### High-Level Architecture
 
 <div align="center">
-<img src="docs/images/high_level.png" alt="AURA Robot System – High-Level Architecture Diagram" width="850"/>
+<img src="images/high_level.png" alt="AURA Robot System – High-Level Architecture Diagram" width="850"/>
 </div>
 
 The **Edge Robot Tier** (Raspberry Pi 4B) runs system initialization, the AI interaction & logic hub, a reactive motion worker, and the vision processing engine, streaming data to the **AWS Hosted MQTT Broker (Eclipse Mosquitto)**. This connects to a Spring Boot backend on an **EC2 instance**, backed by an **RDS PostgreSQL** database, with static assets served via **S3 + CloudFront**, and outbound integrations to payment gateways and other external services.
@@ -82,7 +82,7 @@ The **Edge Robot Tier** (Raspberry Pi 4B) runs system initialization, the AI int
 ### Complete Cloud Deployment
 
 <div align="center">
-<img src="docs/images/final_deployment.png" alt="AURA Restaurant System – Complete Deployment Diagram" width="900"/>
+<img src="images/final_deployment.png" alt="AURA Restaurant System – Complete Deployment Diagram" width="900"/>
 </div>
 
 **Access flow:** `aurarestaurant.tech` → Route 53 DNS resolution → EC2 public IP → encrypted HTTPS/WSS traffic (port 443) → Nginx reverse proxy.
@@ -104,7 +104,7 @@ SSL termination and WSS upgrade are handled entirely at the Nginx layer. Payment
 ### 💻 Software Technology Stack
 
 <div align="center">
-<img src="docs/images/tech_stack.png" alt="AURA Software Technology Stack" width="850"/>
+<img src="images/tech_stack.png" alt="AURA Software Technology Stack" width="850"/>
 </div>
 
 | Category | Stack |
@@ -122,7 +122,7 @@ SSL termination and WSS upgrade are handled entirely at the Nginx layer. Payment
 ### 🔩 Hardware Specifications
 
 <div align="center">
-<img src="docs/images/hardware_table.png" alt="AURA Hardware Specifications" width="850"/>
+<img src="images/hardware_table.png" alt="AURA Hardware Specifications" width="850"/>
 </div>
 
 | Category | Specification |
@@ -142,19 +142,19 @@ AURA's chassis was fully modeled in **Blender** before fabrication — a cat-ins
 
 <table align="center">
 <tr>
-<td align="center"><img src="docs/images/chassy1.jpeg" width="260"/><br/><sub><b>Head Shell</b> — camera & OLED cavity</sub></td>
-<td align="center"><img src="docs/images/chassy2.jpeg" width="260"/><br/><sub><b>Torso Assembly</b> — arms & display mount</sub></td>
+<td align="center"><img src="images/chassy1.jpeg" width="260"/><br/><sub><b>Head Shell</b> — camera & OLED cavity</sub></td>
+<td align="center"><img src="images/chassy2.jpeg" width="260"/><br/><sub><b>Torso Assembly</b> — arms & display mount</sub></td>
 </tr>
 <tr>
-<td align="center"><img src="docs/images/chassy3.jpeg" width="260"/><br/><sub><b>Internal Frame</b> — electronics bay</sub></td>
-<td align="center"><img src="docs/images/chassy4.jpeg" width="260"/><br/><sub><b>Rotation Base</b> — gear-driven pan mechanism</sub></td>
+<td align="center"><img src="images/chassy3.jpeg" width="260"/><br/><sub><b>Internal Frame</b> — electronics bay</sub></td>
+<td align="center"><img src="images/chassy4.jpeg" width="260"/><br/><sub><b>Rotation Base</b> — gear-driven pan mechanism</sub></td>
 </tr>
 </table>
 
 The gear-driven base (bottom-right) allows AURA to smoothly rotate its whole body toward a guest, while the internal frame keeps servo wiring and control boards neatly isolated from the outer cat-eared shell — the same shell visible in the finished, 3D-printed unit below.
 
 <div align="center">
-<img src="docs/images/real.jpg" alt="AURA final printed and assembled product" width="450"/>
+<img src="images/real.jpg" alt="AURA final printed and assembled product" width="450"/>
 </div>
 
 ---
